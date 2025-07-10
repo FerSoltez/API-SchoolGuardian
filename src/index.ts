@@ -2,10 +2,10 @@ import express, { Application, Request, Response, NextFunction } from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import usuarioRoutes from './routes/usuarioRoutes';
-import clasesRoutes from './routes/claseRoutes';
-import asistenciaRoutes from "./routes/asistenciaRoutes";
-import claseDiasRoutes from "./routes/claseDiasRoutes";
-import inscripcionRoutes from "./routes/inscripcionRoutes";
+//import clasesRoutes from './routes/claseRoutes';
+//import asistenciaRoutes from "./routes/asistenciaRoutes";
+//import claseDiasRoutes from "./routes/claseDiasRoutes";
+//import inscripcionRoutes from "./routes/inscripcionRoutes";
 import path from "path";
 
 dotenv.config();
@@ -17,10 +17,10 @@ app.use(express.json());
 
 // Routes
 app.use("/api", usuarioRoutes);
-app.use("/api", clasesRoutes);
-app.use("/api", asistenciaRoutes);
-app.use("/api", claseDiasRoutes);
-app.use("/api", inscripcionRoutes);
+//app.use("/api", clasesRoutes);
+//app.use("/api", asistenciaRoutes);
+//app.use("/api", claseDiasRoutes);
+//app.use("/api", inscripcionRoutes);
 app.use(express.static(path.join(__dirname, "../public")));
 
 // Ruta de prueba
