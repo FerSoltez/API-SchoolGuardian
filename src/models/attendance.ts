@@ -1,7 +1,5 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from '../config/database';
-import UsersModel from './users';
-import ClassesModel from './classes';
 
 interface AttendanceAttributes {
   attendance_id: number;
@@ -33,18 +31,10 @@ AttendanceModel.init(
     student_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      references: {
-        model: UsersModel,
-        key: "id_user",
-      },
     },
     class_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      references: {
-        model: ClassesModel,
-        key: "class_id",
-      },
     },
     attendance_date: {
       type: DataTypes.DATEONLY,
@@ -66,12 +56,5 @@ AttendanceModel.init(
     timestamps: false,
   }
 );
-
-// Relaciones
-AttendanceModel.belongsTo(UsersModel, { foreignKey: "student_id" });
-UsersModel.hasMany(AttendanceModel, { foreignKey: "student_id" });
-
-AttendanceModel.belongsTo(ClassesModel, { foreignKey: "class_id" });
-ClassesModel.hasMany(AttendanceModel, { foreignKey: "class_id" });
 
 export default AttendanceModel;

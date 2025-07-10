@@ -1,6 +1,5 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from '../config/database';
-import ClassesModel from './classes';
 
 interface SchedulesAttributes {
   schedule_id: number;
@@ -30,10 +29,6 @@ SchedulesModel.init(
     class_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      references: {
-        model: ClassesModel,
-        key: "class_id",
-      },
     },
     weekday: {
       type: DataTypes.ENUM('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'),
@@ -55,9 +50,5 @@ SchedulesModel.init(
     timestamps: false,
   }
 );
-
-// Relaciones
-SchedulesModel.belongsTo(ClassesModel, { foreignKey: "class_id" });
-ClassesModel.hasMany(SchedulesModel, { foreignKey: "class_id" });
 
 export default SchedulesModel;

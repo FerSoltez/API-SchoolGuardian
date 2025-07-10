@@ -1,7 +1,5 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from '../config/database';
-import UsersModel from './users';
-import ClassesModel from './classes';
 
 interface EnrollmentsAttributes {
   enrollment_id: number;
@@ -27,18 +25,10 @@ EnrollmentsModel.init(
     student_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      references: {
-        model: UsersModel,
-        key: "id_user",
-      },
     },
     class_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      references: {
-        model: ClassesModel,
-        key: "class_id",
-      },
     },
   },
   {
@@ -54,12 +44,5 @@ EnrollmentsModel.init(
     ]
   }
 );
-
-// Relaciones
-EnrollmentsModel.belongsTo(UsersModel, { foreignKey: "student_id" });
-UsersModel.hasMany(EnrollmentsModel, { foreignKey: "student_id" });
-
-EnrollmentsModel.belongsTo(ClassesModel, { foreignKey: "class_id" });
-ClassesModel.hasMany(EnrollmentsModel, { foreignKey: "class_id" });
 
 export default EnrollmentsModel;

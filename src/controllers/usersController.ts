@@ -9,6 +9,9 @@ import Schedules from "../models/schedules";
 import transporter from "../utils/emailTransporter";
 import { v4 as uuidv4 } from 'uuid';
 
+// Import associations to establish relationships
+import "../models/associations";
+
 // Augment the Request interface to include user property
 declare global {
   namespace Express {
