@@ -1,7 +1,7 @@
 import express, { Application, Request, Response, NextFunction } from "express";
 import dotenv from "dotenv";
 import cors from "cors";
-import usuarioRoutes from './routes/usuarioRoutes';
+import usersRoutes from './routes/usersRoutes';
 //import clasesRoutes from './routes/claseRoutes';
 //import asistenciaRoutes from "./routes/asistenciaRoutes";
 //import claseDiasRoutes from "./routes/claseDiasRoutes";
@@ -16,7 +16,7 @@ app.use(cors());
 app.use(express.json());
 
 // Routes
-app.use("/api", usuarioRoutes);
+app.use("/api", usersRoutes);
 //app.use("/api", clasesRoutes);
 //app.use("/api", asistenciaRoutes);
 //app.use("/api", claseDiasRoutes);
