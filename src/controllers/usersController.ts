@@ -119,6 +119,7 @@ const usersController = {
       try {
         decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_key') as { email: string, user_uuid: string };
       } catch (error) {
+        console.error('Error al verificar token:', error);
         return res.status(400).json({ message: "Token inválido o expirado" });
       }
 
@@ -130,21 +131,30 @@ const usersController = {
       });
 
       if (!user) {
+        console.error('Usuario no encontrado:', decoded.email, decoded.user_uuid);
         return res.status(404).json({ message: "Usuario no encontrado" });
       }
 
-      if (user.verification) {
+      // Verificar si ya está verificado
+      if (user.verification === true) {
         return res.status(400).json({ message: "La cuenta ya está verificada" });
       }
 
       // Actualizar el campo verification a true
-      await Users.update(
+      const [affectedRows] = await Users.update(
         { verification: true }, 
         { where: { id_user: user.id_user } }
       );
 
+      if (affectedRows === 0) {
+        console.error('No se pudo actualizar el usuario:', user.id_user);
+        return res.status(500).json({ message: "Error al verificar la cuenta" });
+      }
+
+      console.log('Usuario verificado exitosamente:', user.email);
       res.status(200).json({ message: "Cuenta verificada exitosamente" });
     } catch (error) {
+      console.error('Error en verifyEmail:', error);
       res.status(500).json({ error: (error as Error).message });
     }
   },
@@ -163,6 +173,7 @@ const usersController = {
       try {
         decoded = jwt.verify(token as string, process.env.JWT_SECRET || 'secret_key') as { email: string, user_uuid: string };
       } catch (error) {
+        console.error('Error al verificar token (GET):', error);
         return res.status(400).json({ message: "Token inválido o expirado" });
       }
 
@@ -174,21 +185,29 @@ const usersController = {
       });
 
       if (!user) {
+        console.error('Usuario no encontrado (GET):', decoded.email, decoded.user_uuid);
         return res.status(404).json({ message: "Usuario no encontrado" });
       }
 
-      if (user.verification) {
+      if (user.verification === true) {
         return res.status(400).json({ message: "La cuenta ya está verificada" });
       }
 
       // Actualizar el campo verification a true
-      await Users.update(
+      const [affectedRows] = await Users.update(
         { verification: true }, 
         { where: { id_user: user.id_user } }
       );
 
+      if (affectedRows === 0) {
+        console.error('No se pudo actualizar el usuario (GET):', user.id_user);
+        return res.status(500).json({ message: "Error al verificar la cuenta" });
+      }
+
+      console.log('Usuario verificado exitosamente (GET):', user.email);
       res.status(200).json({ message: "Cuenta verificada exitosamente" });
     } catch (error) {
+      console.error('Error en verifyAccountGet:', error);
       res.status(500).json({ error: (error as Error).message });
     }
   },
@@ -512,6 +531,67 @@ const usersController = {
       await transporter.sendMail(mailOptions);
   
       res.status(200).json({ message: "Correo enviado exitosamente." });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  },
+
+  // Endpoint de debug para verificar usuarios (temporal)
+  debugUsers: async (req: Request, res: Response) => {
+    try {
+      const users = await Users.findAll({
+        attributes: ['id_user', 'name', 'email', 'role', 'user_uuid', 'verification', 'attempts'],
+        limit: 10
+      });
+      
+      console.log('Usuarios en la base de datos:', users.map(u => ({
+        id: u.id_user,
+        email: u.email,
+        verification: u.verification,
+        verification_type: typeof u.verification
+      })));
+      
+      res.status(200).json({
+        count: users.length,
+        users: users.map(u => ({
+          id: u.id_user,
+          email: u.email,
+          verification: u.verification,
+          verification_type: typeof u.verification
+        }))
+      });
+    } catch (error) {
+      console.error('Error en debugUsers:', error);
+      res.status(500).json({ error: (error as Error).message });
+    }
+  },
+
+  // Endpoint para verificar un token JWT (temporal - solo para debug)
+  verifyToken: async (req: Request, res: Response) => {
+    try {
+      const { token } = req.body;
+      
+      if (!token) {
+        return res.status(400).json({ message: "Token es requerido" });
+      }
+      
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_key') as { email: string, user_uuid: string };
+        console.log('Token decodificado:', decoded);
+        
+        res.status(200).json({
+          valid: true,
+          decoded: decoded,
+          message: "Token válido"
+        });
+      } catch (error) {
+        console.error('Error al verificar token:', error);
+        res.status(400).json({
+          valid: false,
+          error: (error as Error).message,
+          message: "Token inválido"
+        });
+      }
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
     }

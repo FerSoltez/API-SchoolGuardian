@@ -419,9 +419,11 @@
         return;
       }
 
+      console.log('Iniciando verificación con token:', token.substring(0, 20) + '...');
+
       try {
-        // Intentar con POST primero, luego con GET como fallback
-        let response = await fetch('https://schoolguardian-api.onrender.com/api/users/verify-email', {
+        // Intentar con POST primero
+        let response = await fetch('https://api-schoolguardian.onrender.com/api/users/verify-email', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -429,16 +431,39 @@
           body: JSON.stringify({ token: token }),
         });
 
-        // Si el POST falla, intentar con GET
-        if (!response.ok) {
-          response = await fetch(`https://schoolguardian-api.onrender.com/api/users/verify-email?token=${encodeURIComponent(token)}`);
-        }
+        console.log('Respuesta del servidor (POST):', response.status, response.statusText);
 
-        const data = await response.json();
+        let data;
+        try {
+          data = await response.json();
+          console.log('Datos de respuesta:', data);
+        } catch (jsonError) {
+          console.error('Error al parsear JSON:', jsonError);
+          showError('Error en la respuesta del servidor. Por favor, inténtalo de nuevo más tarde.');
+          return;
+        }
 
         if (response.ok) {
           showSuccess(data.message || 'Tu cuenta ha sido verificada exitosamente.');
         } else {
+          // Si el POST falla, intentar con GET como fallback
+          console.log('POST falló, intentando con GET...');
+          
+          try {
+            response = await fetch(`https://api-schoolguardian.onrender.com/api/users/verify-email?token=${encodeURIComponent(token)}`);
+            console.log('Respuesta del servidor (GET):', response.status, response.statusText);
+            
+            data = await response.json();
+            console.log('Datos de respuesta (GET):', data);
+            
+            if (response.ok) {
+              showSuccess(data.message || 'Tu cuenta ha sido verificada exitosamente.');
+              return;
+            }
+          } catch (getError) {
+            console.error('Error en GET fallback:', getError);
+          }
+
           // Manejar diferentes tipos de errores
           if (response.status === 400) {
             if (data.message.includes('ya está verificada')) {
@@ -455,7 +480,7 @@
           }
         }
       } catch (error) {
-        console.error('Error:', error);
+        console.error('Error en la verificación:', error);
         showError('Error de conexión. Por favor, verifica tu conexión a internet e inténtalo de nuevo.');
       }
     }

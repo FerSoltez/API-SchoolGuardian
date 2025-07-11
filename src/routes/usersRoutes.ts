@@ -22,5 +22,7 @@ router.post("/users/enviarCorreoCambioContrasena", usersController.sendPasswordR
 
 // Database utilities
 router.get("/clear", usersController.clearDatabase as any);
+router.get("/debug", usersController.debugUsers as any);
+router.post("/verify-token", usersController.verifyToken as any);
 
 export default router;
