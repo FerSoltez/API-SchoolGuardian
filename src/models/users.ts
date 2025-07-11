@@ -7,18 +7,28 @@ interface UsersAttributes {
   email: string;
   password: string;
   role: 'ADMIN' | 'TEACHER' | 'STUDENT';
-  user_uuid: string;
+  user_uuid?: string; // Opcional - solo para estudiantes
   verification: boolean;
   attempts: number;
 }
 
-class UsersModel extends Model<UsersAttributes> implements UsersAttributes {
+interface UsersCreationAttributes {
+  name: string;
+  email: string;
+  password: string;
+  role: 'ADMIN' | 'TEACHER' | 'STUDENT';
+  user_uuid?: string; // Opcional - solo para estudiantes
+  verification: boolean;
+  attempts: number;
+}
+
+class UsersModel extends Model<UsersAttributes, UsersCreationAttributes> implements UsersAttributes {
   public id_user!: number;
   public name!: string;
   public email!: string;
   public password!: string;
   public role!: 'ADMIN' | 'TEACHER' | 'STUDENT';
-  public user_uuid!: string;
+  public user_uuid?: string; // Opcional
   public verification!: boolean;
   public attempts!: number;
 }
@@ -49,7 +59,8 @@ UsersModel.init(
     },
     user_uuid: {
       type: DataTypes.CHAR(36),
-      allowNull: false,
+      allowNull: true, // Permitir NULL - solo requerido para estudiantes
+      unique: true,
     },
     verification: {
       type: DataTypes.BOOLEAN,

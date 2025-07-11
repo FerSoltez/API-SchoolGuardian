@@ -26,37 +26,69 @@ const cuentasBloqueadas: { [email: string]: number } = {};
 const usersController = {
   createUser: async (req: Request, res: Response) => {
     try {
+      const { name, email, password, role, user_uuid } = req.body;
+
+      // Validar campos obligatorios
+      if (!name || !email || !password || !role) {
+        return res.status(400).json({ message: "Nombre, email, contraseña y rol son requeridos." });
+      }
+
+      // Validar que el user_uuid sea obligatorio solo para estudiantes
+      if (role === 'STUDENT') {
+        if (!user_uuid) {
+          return res.status(400).json({ message: "El campo user_uuid es obligatorio para estudiantes." });
+        }
+        
+        // Verificar que el user_uuid no esté ya en uso
+        const existingUserWithUuid = await Users.findOne({ where: { user_uuid } });
+        if (existingUserWithUuid) {
+          return res.status(400).json({ message: "El user_uuid ya está en uso." });
+        }
+      }
+
       // Verificar si ya existe un usuario con el mismo correo
-      const existingUser = await Users.findOne({ where: { email: req.body.email } });
+      const existingUser = await Users.findOne({ where: { email } });
       if (existingUser) {
         return res.status(400).json({ message: "Ya existe un usuario con este correo." });
       }
 
       // Hashear la contraseña
-      const hashedPassword = await bcrypt.hash(req.body.password, 10);
+      const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Generar UUID único para el usuario
-      const userUuid = uuidv4();
-
-      // Crear el nuevo usuario
-      const newUser = await Users.create({ 
-        ...req.body, 
-        password: hashedPassword, 
-        user_uuid: userUuid,
+      // Preparar datos del usuario
+      const userData: any = {
+        name,
+        email,
+        password: hashedPassword,
+        role,
         attempts: 3,
         verification: false
-      });
+      };
+
+      // Solo agregar user_uuid para estudiantes
+      if (role === 'STUDENT') {
+        userData.user_uuid = user_uuid;
+      }
+
+      // Crear el nuevo usuario
+      const newUser = await Users.create(userData);
+
+      // Preparar datos para el token JWT
+      const tokenData: any = { email };
+      if (role === 'STUDENT') {
+        tokenData.user_uuid = user_uuid;
+      }
 
       // Enviar correo de verificación
       const verificationToken = jwt.sign(
-        { email: req.body.email, user_uuid: userUuid }, 
+        tokenData, 
         process.env.JWT_SECRET || 'secret_key', 
         { expiresIn: '24h' }
       );
 
       const mailOptions = {
         from: '"Soporte SchoolGuardian" <tu_correo@gmail.com>',
-        to: req.body.email,
+        to: email,
         subject: "Verificación de Cuenta",
         html: `
           <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);">
@@ -67,7 +99,7 @@ const usersController = {
             <div style="padding: 30px; line-height: 1.6;">
               <div style="font-size: 24px; font-weight: 600; margin-bottom: 20px; text-align: center; color: #333;">Verificación de Cuenta</div>
               
-              <p style="margin-bottom: 15px;">Hola, ${req.body.name},</p>
+              <p style="margin-bottom: 15px;">Hola, ${name},</p>
               
               <p style="margin-bottom: 20px;">Gracias por registrarte en SchoolGuardian. Para activar tu cuenta, haz clic en el siguiente botón:</p>
               
@@ -117,18 +149,19 @@ const usersController = {
       // Verificar el token
       let decoded: any;
       try {
-        decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_key') as { email: string, user_uuid: string };
+        decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_key') as { email: string, user_uuid?: string };
       } catch (error) {
         console.error('Error al verificar token:', error);
         return res.status(400).json({ message: "Token inválido o expirado" });
       }
 
-      const user = await Users.findOne({ 
-        where: { 
-          email: decoded.email,
-          user_uuid: decoded.user_uuid 
-        } 
-      });
+      // Buscar usuario por email y user_uuid (si existe)
+      const whereClause: any = { email: decoded.email };
+      if (decoded.user_uuid) {
+        whereClause.user_uuid = decoded.user_uuid;
+      }
+
+      const user = await Users.findOne({ where: whereClause });
 
       if (!user) {
         console.error('Usuario no encontrado:', decoded.email, decoded.user_uuid);
@@ -171,18 +204,19 @@ const usersController = {
       // Verificar el token
       let decoded: any;
       try {
-        decoded = jwt.verify(token as string, process.env.JWT_SECRET || 'secret_key') as { email: string, user_uuid: string };
+        decoded = jwt.verify(token as string, process.env.JWT_SECRET || 'secret_key') as { email: string, user_uuid?: string };
       } catch (error) {
         console.error('Error al verificar token (GET):', error);
         return res.status(400).json({ message: "Token inválido o expirado" });
       }
 
-      const user = await Users.findOne({ 
-        where: { 
-          email: decoded.email,
-          user_uuid: decoded.user_uuid 
-        } 
-      });
+      // Buscar usuario por email y user_uuid (si existe)
+      const whereClause: any = { email: decoded.email };
+      if (decoded.user_uuid) {
+        whereClause.user_uuid = decoded.user_uuid;
+      }
+
+      const user = await Users.findOne({ where: whereClause });
 
       if (!user) {
         console.error('Usuario no encontrado (GET):', decoded.email, decoded.user_uuid);

@@ -11,6 +11,14 @@ Una API REST para la gestión de usuarios, asistencia y administración escolar.
 - **Recuperación de contraseña**: Sistema de recuperación de contraseñas por correo
 - **Middleware de autenticación**: Protección de rutas mediante middleware
 - **Base de datos MySQL**: Integración con MySQL usando Sequelize ORM
+- **Lógica diferenciada por roles**: Manejo inteligente de UUID solo para estudiantes
+
+## Documentación Adicional
+
+- 📋 [**VALIDACIONES.md**](./VALIDACIONES.md) - Reglas de validación y ejemplos de uso
+- 🔐 [**USER_UUID_LOGIC.md**](./USER_UUID_LOGIC.md) - Lógica detallada del campo user_uuid
+- 🧪 [**TESTING_EXAMPLES.md**](./TESTING_EXAMPLES.md) - Ejemplos de pruebas y casos de uso
+- 📝 [**CAMBIOS_UUID.md**](./CAMBIOS_UUID.md) - Historial de cambios en el sistema UUID
 
 ## Tecnologías Utilizadas
 
@@ -110,8 +118,11 @@ API-SchoolGuardian/
 
 #### Registro de Usuario
 - **POST** `/api/users`
-- **Body**: `{ name, email, password, role, phone }`
+- **Body**: 
+  - Para **ADMIN** y **TEACHER**: `{ name, email, password, role }`
+  - Para **STUDENT**: `{ name, email, password, role, user_uuid }` (user_uuid es **obligatorio**)
 - **Respuesta**: Crea usuario y envía correo de verificación
+- **Nota**: El `user_uuid` para estudiantes debe ser proporcionado por el dispositivo móvil
 
 #### Login de Usuario
 - **POST** `/api/users/login`
@@ -217,8 +228,7 @@ interface User {
   name: string;
   email: string;
   password: string;
-  role: 'student' | 'teacher' | 'admin';
-  phone?: string;
+  role: 'STUDENT' | 'TEACHER' | 'ADMIN';
   user_uuid: string;
   attempts: number;
   verification: boolean;
@@ -227,10 +237,15 @@ interface User {
 }
 ```
 
+**Reglas importantes para `user_uuid`**:
+- **STUDENT**: El `user_uuid` debe ser proporcionado obligatoriamente desde el dispositivo móvil
+- **TEACHER** y **ADMIN**: El `user_uuid` se genera automáticamente con UUID v4
+- Debe ser único en toda la base de datos
+
 ### Roles Disponibles
-- **student**: Estudiante
-- **teacher**: Profesor
-- **admin**: Administrador
+- **STUDENT**: Estudiante (requiere `user_uuid` proporcionado desde dispositivo móvil)
+- **TEACHER**: Profesor (genera `user_uuid` automáticamente)
+- **ADMIN**: Administrador (genera `user_uuid` automáticamente)
 
 ## Seguridad
 
@@ -296,3 +311,67 @@ Este proyecto está bajo la licencia MIT. Ver el archivo `LICENSE` para más det
 ---
 
 **Nota**: Este proyecto forma parte del sistema SchoolGuardian desarrollado por el equipo ORIZON.
+
+### Ejemplos de Registro
+
+#### Registro de Administrador o Profesor
+```json
+POST /api/users
+Content-Type: application/json
+
+{
+  "name": "Juan Pérez",
+  "email": "juan.perez@escuela.com",
+  "password": "mi_password_seguro",
+  "role": "TEACHER"
+}
+```
+
+#### Registro de Estudiante
+```json
+POST /api/users
+Content-Type: application/json
+
+{
+  "name": "María González",
+  "email": "maria.gonzalez@estudiante.com",
+  "password": "mi_password_seguro",
+  "role": "STUDENT",
+  "user_uuid": "uuid_del_dispositivo_movil"
+}
+```
+
+### Validaciones de Registro
+
+#### Error: Estudiante sin user_uuid
+```json
+POST /api/users
+Content-Type: application/json
+
+{
+  "name": "María González",
+  "email": "maria.gonzalez@estudiante.com",
+  "password": "mi_password_seguro",
+  "role": "STUDENT"
+  // user_uuid faltante
+}
+```
+
+**Respuesta de Error**:
+```json
+{
+  "message": "El campo user_uuid es obligatorio para estudiantes."
+}
+```
+
+#### Error: user_uuid duplicado
+```json
+{
+  "message": "El user_uuid ya está en uso."
+}
+```
+
+**Importante**: 
+- El `user_uuid` para estudiantes debe ser único y proporcionado por el dispositivo móvil
+- Para administradores y profesores, el `user_uuid` se genera automáticamente
+- El campo `user_uuid` es obligatorio solo para estudiantes
