@@ -150,7 +150,7 @@ const usersController = {
 
   loginUser: async (req: Request, res: Response) => {
     try {
-      const { email, password } = req.body;
+      const { email, password, id_user, user_uuid } = req.body;
   
       if (!email || !password) {
         return res.status(400).json({ message: "Email y contraseña son requeridos" });
@@ -160,6 +160,19 @@ const usersController = {
   
       if (!user) {
         return res.status(404).json({ message: "Usuario no encontrado" });
+      }
+
+      // Verificar que el id_user y user_uuid coincidan con los almacenados SOLO para estudiantes
+      if (user.role === 'STUDENT') {
+        if (!id_user || !user_uuid) {
+          return res.status(400).json({ 
+            message: "ID de usuario y UUID son requeridos para estudiantes"
+          });
+        }
+        
+        if (user.id_user !== parseInt(id_user) || user.user_uuid !== user_uuid) {
+          return res.status(403).json({ message: "Credenciales de usuario inválidas" });
+        }
       }
 
       // Verificar si la cuenta está verificada
