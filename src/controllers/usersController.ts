@@ -97,6 +97,7 @@ const usersController = {
           name: newUser.name,
           email: newUser.email,
           role: newUser.role,
+          user_uuid: newUser.user_uuid, // Importante para estudiantes
           verification: newUser.verification
         }
       });
@@ -150,7 +151,7 @@ const usersController = {
 
   loginUser: async (req: Request, res: Response) => {
     try {
-      const { email, password, id_user, user_uuid } = req.body;
+      const { email, password, user_uuid } = req.body;
   
       if (!email || !password) {
         return res.status(400).json({ message: "Email y contraseña son requeridos" });
@@ -162,16 +163,16 @@ const usersController = {
         return res.status(404).json({ message: "Usuario no encontrado" });
       }
 
-      // Verificar que el id_user y user_uuid coincidan con los almacenados SOLO para estudiantes
+      // Verificar que el user_uuid coincida SOLO para estudiantes
       if (user.role === 'STUDENT') {
-        if (!id_user || !user_uuid) {
+        if (!user_uuid) {
           return res.status(400).json({ 
-            message: "ID de usuario y UUID son requeridos para estudiantes"
+            message: "UUID es requerido para estudiantes"
           });
         }
         
-        if (user.id_user !== parseInt(id_user) || user.user_uuid !== user_uuid) {
-          return res.status(403).json({ message: "Credenciales de usuario inválidas" });
+        if (user.user_uuid !== user_uuid) {
+          return res.status(403).json({ message: "UUID de usuario inválido" });
         }
       }
 
