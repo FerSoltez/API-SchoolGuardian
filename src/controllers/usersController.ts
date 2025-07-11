@@ -69,6 +69,7 @@ const usersController = {
       if (role === 'STUDENT') {
         userData.user_uuid = user_uuid;
       }
+      // Para maestros y administradores, user_uuid se omite completamente
 
       // Crear el nuevo usuario
       const newUser = await Users.create(userData);

@@ -61,6 +61,7 @@ UsersModel.init(
       type: DataTypes.CHAR(36),
       allowNull: true, // Permitir NULL - solo requerido para estudiantes
       unique: true,
+      defaultValue: null, // Valor por defecto explícito
     },
     verification: {
       type: DataTypes.BOOLEAN,
