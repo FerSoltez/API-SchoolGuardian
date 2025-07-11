@@ -61,7 +61,7 @@ const usersController = {
         html: `
           <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);">
             <div style="background-color: #1a1a1a; color: white; padding: 20px; text-align: center;">
-              <h1 style="margin: 0; font-size: 24px;">SCHOOL GUARDIAN</h1>
+              <h1 style="margin: 0; font-size: 24px; color: white;">SCHOOL GUARDIAN</h1>
             </div>
             
             <div style="padding: 30px; line-height: 1.6;">
@@ -72,7 +72,7 @@ const usersController = {
               <p style="margin-bottom: 20px;">Gracias por registrarte en SchoolGuardian. Para activar tu cuenta, haz clic en el siguiente botón:</p>
               
               <div style="text-align: center; margin: 25px 0;">
-                <a href="https://schoolguardian-api.onrender.com/verificarCuenta.html?token=${verificationToken}" style="display: inline-block; background-color: #1a1a1a; color: white; text-decoration: none; padding: 12px 30px; border-radius: 5px; font-weight: 500;">Verificar Cuenta</a>
+                <a href="https://api-schoolguardian.onrender.com/verificarCuenta.html?token=${verificationToken}" style="display: inline-block; background-color: #1a1a1a; color: white; text-decoration: none; padding: 12px 30px; border-radius: 5px; font-weight: 500;">Verificar Cuenta</a>
               </div>
               
               <div style="margin-top: 25px; padding: 15px; background-color: #f9f9f9; border-radius: 5px; font-size: 14px;">
@@ -482,7 +482,7 @@ const usersController = {
         html: `
           <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);">
             <div style="background-color: #1a1a1a; color: white; padding: 20px; text-align: center;">
-              <h1 style="margin: 0; font-size: 24px;">SCHOOL GUARDIAN</h1>
+              <h1 style="margin: 0; font-size: 24px; color: white;">SCHOOL GUARDIAN</h1>
             </div>
             
             <div style="padding: 30px; line-height: 1.6;">
