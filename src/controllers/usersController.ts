@@ -72,7 +72,7 @@ const usersController = {
               <p style="margin-bottom: 20px;">Gracias por registrarte en SchoolGuardian. Para activar tu cuenta, haz clic en el siguiente botón:</p>
               
               <div style="text-align: center; margin: 25px 0;">
-                <a href="https://tu-dominio.com/verify-email?token=${verificationToken}" style="display: inline-block; background-color: #1a1a1a; color: white; text-decoration: none; padding: 12px 30px; border-radius: 5px; font-weight: 500;">Verificar Cuenta</a>
+                <a href="https://schoolguardian-api.onrender.com/verificarCuenta.html?token=${verificationToken}" style="display: inline-block; background-color: #1a1a1a; color: white; text-decoration: none; padding: 12px 30px; border-radius: 5px; font-weight: 500;">Verificar Cuenta</a>
               </div>
               
               <div style="margin-top: 25px; padding: 15px; background-color: #f9f9f9; border-radius: 5px; font-size: 14px;">
@@ -118,6 +118,50 @@ const usersController = {
       let decoded: any;
       try {
         decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_key') as { email: string, user_uuid: string };
+      } catch (error) {
+        return res.status(400).json({ message: "Token inválido o expirado" });
+      }
+
+      const user = await Users.findOne({ 
+        where: { 
+          email: decoded.email,
+          user_uuid: decoded.user_uuid 
+        } 
+      });
+
+      if (!user) {
+        return res.status(404).json({ message: "Usuario no encontrado" });
+      }
+
+      if (user.verification) {
+        return res.status(400).json({ message: "La cuenta ya está verificada" });
+      }
+
+      // Actualizar el campo verification a true
+      await Users.update(
+        { verification: true }, 
+        { where: { id_user: user.id_user } }
+      );
+
+      res.status(200).json({ message: "Cuenta verificada exitosamente" });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  },
+
+  // Método adicional para verificar cuenta via GET (para enlaces más simples)
+  verifyAccountGet: async (req: Request, res: Response) => {
+    try {
+      const { token } = req.query;
+
+      if (!token) {
+        return res.status(400).json({ message: "Token de verificación es requerido" });
+      }
+
+      // Verificar el token
+      let decoded: any;
+      try {
+        decoded = jwt.verify(token as string, process.env.JWT_SECRET || 'secret_key') as { email: string, user_uuid: string };
       } catch (error) {
         return res.status(400).json({ message: "Token inválido o expirado" });
       }

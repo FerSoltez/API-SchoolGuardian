@@ -8,6 +8,7 @@ const router = Router();
 router.post("/users", usersController.createUser as any);
 router.post("/users/login", usersController.loginUser as any);
 router.post("/users/verify-email", usersController.verifyEmail as any);
+router.get("/users/verify-email", usersController.verifyAccountGet as any);
 
 // User management routes
 router.post("/users/get", usersController.getAllUsers);
