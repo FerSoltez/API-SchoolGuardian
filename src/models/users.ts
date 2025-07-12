@@ -6,8 +6,8 @@ interface UsersAttributes {
   name: string;
   email: string;
   password: string;
-  role: 'ADMIN' | 'TEACHER' | 'STUDENT';
-  user_uuid?: string; // Opcional - solo para estudiantes
+  role: 'Administrator' | 'Professor' | 'Student';
+  user_uuid?: string; // Nullable según el nuevo esquema - API valida esto
   verification: boolean;
   attempts: number;
 }
@@ -16,8 +16,8 @@ interface UsersCreationAttributes {
   name: string;
   email: string;
   password: string;
-  role: 'ADMIN' | 'TEACHER' | 'STUDENT';
-  user_uuid?: string; // Opcional - solo para estudiantes
+  role: 'Administrator' | 'Professor' | 'Student';
+  user_uuid?: string; // Nullable - API valida esto
   verification: boolean;
   attempts: number;
 }
@@ -27,8 +27,8 @@ class UsersModel extends Model<UsersAttributes, UsersCreationAttributes> impleme
   public name!: string;
   public email!: string;
   public password!: string;
-  public role!: 'ADMIN' | 'TEACHER' | 'STUDENT';
-  public user_uuid?: string; // Opcional
+  public role!: 'Administrator' | 'Professor' | 'Student';
+  public user_uuid?: string; // Nullable
   public verification!: boolean;
   public attempts!: number;
 }
@@ -54,14 +54,14 @@ UsersModel.init(
       allowNull: false,
     },
     role: {
-      type: DataTypes.ENUM('ADMIN', 'TEACHER', 'STUDENT'),
+      type: DataTypes.ENUM('Administrator', 'Professor', 'Student'),
       allowNull: false,
     },
     user_uuid: {
       type: DataTypes.CHAR(36),
-      allowNull: true, // Permitir NULL - solo requerido para estudiantes
+      allowNull: true, // Nullable según el nuevo esquema - API valida esto
       unique: true,
-      defaultValue: null, // Valor por defecto explícito
+      defaultValue: null,
     },
     verification: {
       type: DataTypes.BOOLEAN,
@@ -71,7 +71,7 @@ UsersModel.init(
     attempts: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 3,
+      defaultValue: 0, // Cambiado a 0 según el nuevo esquema
     },
   },
   {

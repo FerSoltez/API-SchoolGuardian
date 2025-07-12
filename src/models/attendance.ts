@@ -2,37 +2,37 @@ import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from '../config/database';
 
 interface AttendanceAttributes {
-  attendance_id: number;
-  student_id: number;
-  class_id: number;
+  id_attendance: number;
+  id_student: number;
+  id_class: number;
   attendance_date: Date;
   attendance_time: string;
-  status: 'Present' | 'Late' | 'Absent' | 'Excused';
+  status: 'Present' | 'Late' | 'Absent' | 'Justified';
 }
 
-interface AttendanceCreationAttributes extends Optional<AttendanceAttributes, "attendance_id"> {}
+interface AttendanceCreationAttributes extends Optional<AttendanceAttributes, "id_attendance"> {}
 
 class AttendanceModel extends Model<AttendanceAttributes, AttendanceCreationAttributes> implements AttendanceAttributes {
-  public attendance_id!: number;
-  public student_id!: number;
-  public class_id!: number;
+  public id_attendance!: number;
+  public id_student!: number;
+  public id_class!: number;
   public attendance_date!: Date;
   public attendance_time!: string;
-  public status!: 'Present' | 'Late' | 'Absent' | 'Excused';
+  public status!: 'Present' | 'Late' | 'Absent' | 'Justified';
 }
 
 AttendanceModel.init(
   {
-    attendance_id: {
+    id_attendance: {
       type: DataTypes.INTEGER,
       autoIncrement: true,
       primaryKey: true,
     },
-    student_id: {
+    id_student: {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
-    class_id: {
+    id_class: {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
@@ -45,7 +45,7 @@ AttendanceModel.init(
       allowNull: false,
     },
     status: {
-      type: DataTypes.ENUM('Present', 'Late', 'Absent', 'Excused'),
+      type: DataTypes.ENUM('Present', 'Late', 'Absent', 'Justified'),
       allowNull: false,
     },
   },

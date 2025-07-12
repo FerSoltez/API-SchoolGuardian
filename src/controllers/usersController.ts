@@ -34,7 +34,7 @@ const usersController = {
       }
 
       // Validar que el user_uuid sea obligatorio solo para estudiantes
-      if (role === 'STUDENT') {
+      if (role === 'Student') {
         if (!user_uuid) {
           return res.status(400).json({ message: "El campo user_uuid es obligatorio para estudiantes." });
         }
@@ -62,11 +62,11 @@ const usersController = {
         password: hashedPassword,
         role,
         attempts: 3,
-        verification: role !== 'STUDENT' // Solo los estudiantes necesitan verificación
+        verification: role !== 'Student' // Solo los estudiantes necesitan verificación
       };
 
       // Solo agregar user_uuid para estudiantes
-      if (role === 'STUDENT') {
+      if (role === 'Student') {
         userData.user_uuid = user_uuid;
       }
       // Para maestros y administradores, user_uuid se omite completamente
@@ -75,7 +75,7 @@ const usersController = {
       const newUser = await Users.create(userData);
 
       // Enviar correo de verificación SOLO para estudiantes
-      if (role === 'STUDENT') {
+      if (role === 'Student') {
         // Preparar datos para el token JWT
         const tokenData: any = { email, user_uuid };
 
@@ -123,7 +123,7 @@ const usersController = {
       }
 
       // Respuesta diferenciada según el rol
-      const message = role === 'STUDENT' 
+      const message = role === 'Student' 
         ? "Usuario creado exitosamente. Revisa tu correo para verificar tu cuenta."
         : "Usuario creado exitosamente. Tu cuenta está lista para usar.";
 
@@ -266,7 +266,7 @@ const usersController = {
       }
 
       // Verificar que el user_uuid coincida SOLO para estudiantes
-      if (user.role === 'STUDENT') {
+      if (user.role === 'Student') {
         if (!user_uuid) {
           return res.status(400).json({ 
             message: "UUID es requerido para estudiantes"
@@ -372,20 +372,20 @@ const usersController = {
 
       let additionalData = {};
 
-      if (user.role === 'TEACHER') {
+      if (user.role === 'Professor') {
         // Si el usuario es un profesor, obtener sus clases con horarios
         const classes = await Classes.findAll({
-          where: { teacher_id: userId },
+          where: { id_professor: userId },
           include: [{ model: Schedules }],
         });
         additionalData = { classes };
-      } else if (user.role === 'STUDENT') {
+      } else if (user.role === 'Student') {
         // Si el usuario es un estudiante, obtener sus asistencias y inscripciones
         const attendance = await Attendance.findAll({
-          where: { student_id: userId },
+          where: { id_student: userId },
         });
         const enrollments = await Enrollments.findAll({
-          where: { student_id: userId },
+          where: { id_student: userId },
           include: [{ model: Classes }],
         });
         additionalData = { attendance, enrollments };
@@ -420,11 +420,11 @@ const usersController = {
       }
   
       // Eliminar datos relacionados según el rol
-      if (user.role === 'STUDENT') {
-        await Attendance.destroy({ where: { student_id: id } });
-        await Enrollments.destroy({ where: { student_id: id } });
-      } else if (user.role === 'TEACHER') {
-        await Classes.destroy({ where: { teacher_id: id } });
+      if (user.role === 'Student') {
+        await Attendance.destroy({ where: { id_student: id } });
+        await Enrollments.destroy({ where: { id_student: id } });
+      } else if (user.role === 'Professor') {
+        await Classes.destroy({ where: { id_professor: id } });
       }
   
       const deleted = await Users.destroy({ where: { id_user: id } });

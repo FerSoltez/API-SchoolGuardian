@@ -2,18 +2,20 @@ import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from '../config/database';
 
 interface SchedulesAttributes {
-  schedule_id: number;
-  class_id: number;
+  id_schedule: number;
+  id_class: number;
+  id_device: number;
   weekday: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
   start_time: string;
   end_time: string;
 }
 
-interface SchedulesCreationAttributes extends Optional<SchedulesAttributes, "schedule_id"> {}
+interface SchedulesCreationAttributes extends Optional<SchedulesAttributes, "id_schedule"> {}
 
 class SchedulesModel extends Model<SchedulesAttributes, SchedulesCreationAttributes> implements SchedulesAttributes {
-  public schedule_id!: number;
-  public class_id!: number;
+  public id_schedule!: number;
+  public id_class!: number;
+  public id_device!: number;
   public weekday!: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
   public start_time!: string;
   public end_time!: string;
@@ -21,12 +23,16 @@ class SchedulesModel extends Model<SchedulesAttributes, SchedulesCreationAttribu
 
 SchedulesModel.init(
   {
-    schedule_id: {
+    id_schedule: {
       type: DataTypes.INTEGER,
       autoIncrement: true,
       primaryKey: true,
     },
-    class_id: {
+    id_class: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    id_device: {
       type: DataTypes.INTEGER,
       allowNull: false,
     },

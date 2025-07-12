@@ -2,31 +2,31 @@ import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from '../config/database';
 
 interface EnrollmentsAttributes {
-  enrollment_id: number;
-  student_id: number;
-  class_id: number;
+  id_enrollment: number;
+  id_student: number;
+  id_class: number;
 }
 
-interface EnrollmentsCreationAttributes extends Optional<EnrollmentsAttributes, "enrollment_id"> {}
+interface EnrollmentsCreationAttributes extends Optional<EnrollmentsAttributes, "id_enrollment"> {}
 
 class EnrollmentsModel extends Model<EnrollmentsAttributes, EnrollmentsCreationAttributes> implements EnrollmentsAttributes {
-  public enrollment_id!: number;
-  public student_id!: number;
-  public class_id!: number;
+  public id_enrollment!: number;
+  public id_student!: number;
+  public id_class!: number;
 }
 
 EnrollmentsModel.init(
   {
-    enrollment_id: {
+    id_enrollment: {
       type: DataTypes.INTEGER,
       autoIncrement: true,
       primaryKey: true,
     },
-    student_id: {
+    id_student: {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
-    class_id: {
+    id_class: {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
@@ -39,7 +39,7 @@ EnrollmentsModel.init(
     indexes: [
       {
         unique: true,
-        fields: ['student_id', 'class_id']
+        fields: ['id_student', 'id_class']
       }
     ]
   }

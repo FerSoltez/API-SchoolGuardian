@@ -7,30 +7,30 @@ import AttendanceModel from './attendance';
 import SchedulesModel from './schedules';
 
 // Users relationships
-UsersModel.hasMany(ClassesModel, { foreignKey: "teacher_id" });
-UsersModel.hasMany(EnrollmentsModel, { foreignKey: "student_id" });
-UsersModel.hasMany(AttendanceModel, { foreignKey: "student_id" });
+UsersModel.hasMany(ClassesModel, { foreignKey: "id_professor" });
+UsersModel.hasMany(EnrollmentsModel, { foreignKey: "id_student" });
+UsersModel.hasMany(AttendanceModel, { foreignKey: "id_student" });
 
 // Classes relationships
-ClassesModel.belongsTo(UsersModel, { foreignKey: "teacher_id" });
-ClassesModel.belongsTo(DevicesModel, { foreignKey: "device_id" });
-ClassesModel.hasMany(EnrollmentsModel, { foreignKey: "class_id" });
-ClassesModel.hasMany(AttendanceModel, { foreignKey: "class_id" });
-ClassesModel.hasMany(SchedulesModel, { foreignKey: "class_id" });
+ClassesModel.belongsTo(UsersModel, { foreignKey: "id_professor" });
+ClassesModel.hasMany(EnrollmentsModel, { foreignKey: "id_class" });
+ClassesModel.hasMany(AttendanceModel, { foreignKey: "id_class" });
+ClassesModel.hasMany(SchedulesModel, { foreignKey: "id_class" });
 
 // Devices relationships
-DevicesModel.hasMany(ClassesModel, { foreignKey: "device_id" });
+DevicesModel.hasMany(SchedulesModel, { foreignKey: "id_device" });
 
 // Enrollments relationships
-EnrollmentsModel.belongsTo(UsersModel, { foreignKey: "student_id" });
-EnrollmentsModel.belongsTo(ClassesModel, { foreignKey: "class_id" });
+EnrollmentsModel.belongsTo(UsersModel, { foreignKey: "id_student" });
+EnrollmentsModel.belongsTo(ClassesModel, { foreignKey: "id_class" });
 
 // Attendance relationships
-AttendanceModel.belongsTo(UsersModel, { foreignKey: "student_id" });
-AttendanceModel.belongsTo(ClassesModel, { foreignKey: "class_id" });
+AttendanceModel.belongsTo(UsersModel, { foreignKey: "id_student" });
+AttendanceModel.belongsTo(ClassesModel, { foreignKey: "id_class" });
 
 // Schedules relationships
-SchedulesModel.belongsTo(ClassesModel, { foreignKey: "class_id" });
+SchedulesModel.belongsTo(ClassesModel, { foreignKey: "id_class" });
+SchedulesModel.belongsTo(DevicesModel, { foreignKey: "id_device" });
 
 export {
   UsersModel,
