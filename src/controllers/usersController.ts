@@ -61,7 +61,7 @@ const usersController = {
         email,
         password: hashedPassword,
         role,
-        attempts: 3,
+        attempts: 3, // Inicia con 3 intentos disponibles
         verification: role !== 'Student' // Solo los estudiantes necesitan verificación
       };
 
@@ -282,6 +282,11 @@ const usersController = {
       if (!user.verification) {
         return res.status(403).json({ message: "Cuenta no verificada. Revisa tu correo electrónico." });
       }
+
+      // Verificar si la cuenta está agotada de intentos (attempts = 0)
+      if (user.attempts === 0) {
+        return res.status(403).json({ message: "Cuenta bloqueada por múltiples intentos fallidos. Contacta al administrador." });
+      }
   
       // Verificar si la cuenta está bloqueada
       if (cuentasBloqueadas[email]) {
@@ -309,7 +314,7 @@ const usersController = {
           return res.status(403).json({ message: "Cuenta bloqueada por múltiples intentos fallidos. Intenta nuevamente en 30 segundos." });
         }
   
-        // Reducir los intentos restantes
+        // Decrementar los intentos restantes
         await Users.update({ attempts: intentosRestantes }, { where: { id_user: user.id_user } });
         return res.status(401).json({ message: `Contraseña incorrecta. Intentos restantes: ${intentosRestantes}` });
       }
