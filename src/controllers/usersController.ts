@@ -62,7 +62,7 @@ const usersController = {
         password: hashedPassword,
         role,
         attempts: 3,
-        verification: false
+        verification: role !== 'STUDENT' // Solo los estudiantes necesitan verificación
       };
 
       // Solo agregar user_uuid para estudiantes
@@ -74,57 +74,61 @@ const usersController = {
       // Crear el nuevo usuario
       const newUser = await Users.create(userData);
 
-      // Preparar datos para el token JWT
-      const tokenData: any = { email };
+      // Enviar correo de verificación SOLO para estudiantes
       if (role === 'STUDENT') {
-        tokenData.user_uuid = user_uuid;
+        // Preparar datos para el token JWT
+        const tokenData: any = { email, user_uuid };
+
+        const verificationToken = jwt.sign(
+          tokenData, 
+          process.env.JWT_SECRET || 'secret_key', 
+          { expiresIn: '24h' }
+        );
+
+        const mailOptions = {
+          from: '"Soporte SchoolGuardian" <tu_correo@gmail.com>',
+          to: email,
+          subject: "Verificación de Cuenta",
+          html: `
+            <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);">
+              <div style="background-color: #1a1a1a; color: white; padding: 20px; text-align: center;">
+                <h1 style="margin: 0; font-size: 24px; color: white;">SCHOOL GUARDIAN</h1>
+              </div>
+              
+              <div style="padding: 30px; line-height: 1.6;">
+                <div style="font-size: 24px; font-weight: 600; margin-bottom: 20px; text-align: center; color: #333;">Verificación de Cuenta</div>
+                
+                <p style="margin-bottom: 15px;">Hola, ${name},</p>
+                
+                <p style="margin-bottom: 20px;">Gracias por registrarte en SchoolGuardian. Para activar tu cuenta, haz clic en el siguiente botón:</p>
+                
+                <div style="text-align: center; margin: 25px 0;">
+                  <a href="https://api-schoolguardian.onrender.com/verificarCuenta.html?token=${verificationToken}" style="display: inline-block; background-color: #1a1a1a; color: white; text-decoration: none; padding: 12px 30px; border-radius: 5px; font-weight: 500;">Verificar Cuenta</a>
+                </div>
+                
+                <div style="margin-top: 25px; padding: 15px; background-color: #f9f9f9; border-radius: 5px; font-size: 14px;">
+                  <p style="margin-top: 0;">Si no te registraste en nuestra plataforma, puedes ignorar este correo.</p>
+                  <p style="margin-bottom: 0;">Por razones de seguridad, este enlace expirará en 24 horas.</p>
+                </div>
+              </div>
+              
+              <div style="background-color: #f5f5f5; padding: 15px; text-align: center; font-size: 14px; color: #666;">
+                <p style="margin: 0;">&copy; 2025 SchoolGuardian. Todos los derechos reservados.</p>
+              </div>
+            </div>
+          `,
+        };
+
+        await transporter.sendMail(mailOptions);
       }
 
-      // Enviar correo de verificación
-      const verificationToken = jwt.sign(
-        tokenData, 
-        process.env.JWT_SECRET || 'secret_key', 
-        { expiresIn: '24h' }
-      );
-
-      const mailOptions = {
-        from: '"Soporte SchoolGuardian" <tu_correo@gmail.com>',
-        to: email,
-        subject: "Verificación de Cuenta",
-        html: `
-          <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);">
-            <div style="background-color: #1a1a1a; color: white; padding: 20px; text-align: center;">
-              <h1 style="margin: 0; font-size: 24px; color: white;">SCHOOL GUARDIAN</h1>
-            </div>
-            
-            <div style="padding: 30px; line-height: 1.6;">
-              <div style="font-size: 24px; font-weight: 600; margin-bottom: 20px; text-align: center; color: #333;">Verificación de Cuenta</div>
-              
-              <p style="margin-bottom: 15px;">Hola, ${name},</p>
-              
-              <p style="margin-bottom: 20px;">Gracias por registrarte en SchoolGuardian. Para activar tu cuenta, haz clic en el siguiente botón:</p>
-              
-              <div style="text-align: center; margin: 25px 0;">
-                <a href="https://api-schoolguardian.onrender.com/verificarCuenta.html?token=${verificationToken}" style="display: inline-block; background-color: #1a1a1a; color: white; text-decoration: none; padding: 12px 30px; border-radius: 5px; font-weight: 500;">Verificar Cuenta</a>
-              </div>
-              
-              <div style="margin-top: 25px; padding: 15px; background-color: #f9f9f9; border-radius: 5px; font-size: 14px;">
-                <p style="margin-top: 0;">Si no te registraste en nuestra plataforma, puedes ignorar este correo.</p>
-                <p style="margin-bottom: 0;">Por razones de seguridad, este enlace expirará en 24 horas.</p>
-              </div>
-            </div>
-            
-            <div style="background-color: #f5f5f5; padding: 15px; text-align: center; font-size: 14px; color: #666;">
-              <p style="margin: 0;">&copy; 2025 SchoolGuardian. Todos los derechos reservados.</p>
-            </div>
-          </div>
-        `,
-      };
-
-      await transporter.sendMail(mailOptions);
+      // Respuesta diferenciada según el rol
+      const message = role === 'STUDENT' 
+        ? "Usuario creado exitosamente. Revisa tu correo para verificar tu cuenta."
+        : "Usuario creado exitosamente. Tu cuenta está lista para usar.";
 
       res.status(201).json({
-        message: "Usuario creado exitosamente. Revisa tu correo para verificar tu cuenta.",
+        message,
         user: {
           id: newUser.id_user,
           name: newUser.name,
