@@ -5,8 +5,9 @@ import usersRoutes from './routes/usersRoutes';
 import classesRoutes from './routes/classesRoutes';
 import schedulesRoutes from './routes/schedulesRoutes';
 import enrollmentsRoutes from './routes/enrollmentsRoutes';
-//import asistenciaRoutes from "./routes/asistenciaRoutes";
-//import claseDiasRoutes from "./routes/claseDiasRoutes";
+import devicesRoutes from './routes/devicesRoutes';
+import attendanceRoutes from './routes/attendanceRoutes';
+
 import path from "path";
 
 dotenv.config();
@@ -21,8 +22,9 @@ app.use("/api", usersRoutes);
 app.use("/api", classesRoutes);
 app.use("/api", schedulesRoutes);
 app.use("/api", enrollmentsRoutes);
-//app.use("/api", asistenciaRoutes);
-//app.use("/api", claseDiasRoutes);
+app.use("/api", devicesRoutes);
+app.use("/api", attendanceRoutes);
+
 app.use(express.static(path.join(__dirname, "../public")));
 
 // Ruta de prueba

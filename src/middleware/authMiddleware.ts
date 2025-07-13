@@ -10,7 +10,7 @@ const authMiddleware = (req: Request, res: Response, next: NextFunction): void =
   }
 
   try {
-    const decoded = jwt.verify(token, "your_jwt_secret") as { id: number; id_tipo: number };
+    const decoded = jwt.verify(token, "your_jwt_secret") as { id: number; role: string };
     req.user = decoded; // Agrega el usuario decodificado al request
     next();
   } catch (error) {

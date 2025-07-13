@@ -1,4 +1,4 @@
-import { DataTypes, Model } from "sequelize";
+import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from '../config/database';
 
 interface DevicesAttributes {
@@ -7,7 +7,9 @@ interface DevicesAttributes {
   status: 'Active' | 'Sleep' | 'Off';
 }
 
-class DevicesModel extends Model<DevicesAttributes> implements DevicesAttributes {
+interface DevicesCreationAttributes extends Optional<DevicesAttributes, "id_device"> {}
+
+class DevicesModel extends Model<DevicesAttributes, DevicesCreationAttributes> implements DevicesAttributes {
   public id_device!: number;
   public location!: string;
   public status!: 'Active' | 'Sleep' | 'Off';
@@ -23,6 +25,15 @@ DevicesModel.init(
     location: {
       type: DataTypes.STRING(100),
       allowNull: false,
+      validate: {
+        notEmpty: {
+          msg: 'La ubicación no puede estar vacía'
+        },
+        len: {
+          args: [1, 100],
+          msg: 'La ubicación debe tener entre 1 y 100 caracteres'
+        }
+      }
     },
     status: {
       type: DataTypes.ENUM('Active', 'Sleep', 'Off'),
