@@ -11,7 +11,7 @@ const router = Router();
 router.post("/attendance", authMiddleware, attendanceController.createAttendance as any);
 
 // Manejar status de asistencia desde dispositivo (sondeo automático) - PATCH porque actualiza/crea
-router.patch("/attendance/device-status", authMiddleware, attendanceController.handleDeviceAttendanceStatus as any);
+router.patch("/attendance/device-status", attendanceController.handleDeviceAttendanceStatus as any);
 
 // Obtener todas las asistencias (Solo profesores y administradores)
 router.post("/attendance/get", authMiddleware, roleMiddleware(["Professor", "Administrator"]), attendanceController.getAllAttendances as any);
