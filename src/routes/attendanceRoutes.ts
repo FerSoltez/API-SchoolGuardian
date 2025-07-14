@@ -8,7 +8,7 @@ const router = Router();
 // Rutas para asistencia
 
 // Crear asistencia (Solo profesores)
-router.post("/attendance", authMiddleware, attendanceController.createAttendance as any);
+router.post("/attendance", attendanceController.createAttendance as any);
 
 // Manejar status de asistencia desde dispositivo (sondeo automático) - PATCH porque actualiza/crea
 router.patch("/attendance/device-status", attendanceController.handleDeviceAttendanceStatus as any);
