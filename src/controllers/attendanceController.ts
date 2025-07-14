@@ -384,6 +384,134 @@ const attendanceController = {
       res.status(500).json({ error: (error as Error).message });
     }
   },
+
+  // Manejar status de asistencia desde dispositivo (sondeo automático)
+  handleDeviceAttendanceStatus: async (req: Request, res: Response) => {
+    try {
+      const { id_student, id_class, status } = req.body;
+
+      // Validar que los campos requeridos estén presentes
+      if (!id_student || !id_class || !status) {
+        return res.status(400).json({ 
+          message: "Todos los campos son requeridos: id_student, id_class, status" 
+        });
+      }
+
+      // Validar que el estado es válido (excluyendo Justified ya que es manual)
+      const validStatuses = ['Present', 'Late', 'Absent'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ 
+          message: "Estado inválido. Estados permitidos para dispositivos: Present, Late, Absent" 
+        });
+      }
+
+      // Validar que el estudiante existe y tiene rol de Student
+      const student = await UsersModel.findOne({
+        where: { id_user: id_student, role: 'Student' }
+      });
+      if (!student) {
+        return res.status(404).json({ message: "Estudiante no encontrado" });
+      }
+
+      // Validar que la clase existe
+      const classExists = await ClassesModel.findByPk(id_class);
+      if (!classExists) {
+        return res.status(404).json({ message: "Clase no encontrada" });
+      }
+
+      // Obtener fecha y hora actual en GMT-6 (México)
+      const now = new Date();
+      const mexicoTime = new Date(now.getTime() - (6 * 60 * 60 * 1000)); // GMT-6
+      const currentDate = mexicoTime.toISOString().split('T')[0]; // YYYY-MM-DD
+      const currentTime = mexicoTime.toTimeString().split(' ')[0]; // HH:MM:SS
+
+      // Buscar si ya existe un registro de asistencia hoy para ese estudiante y esa clase
+      const existingAttendance = await AttendanceModel.findOne({
+        where: {
+          id_student,
+          id_class,
+          attendance_date: currentDate,
+        },
+      });
+
+      let attendanceRecord;
+      let actionTaken: string;
+
+      if (!existingAttendance) {
+        // No existe registro - Crear nuevo
+        attendanceRecord = await AttendanceModel.create({
+          id_student,
+          id_class,
+          attendance_date: new Date(currentDate),
+          attendance_time: currentTime,
+          status,
+        });
+
+        actionTaken = "created";
+      } else {
+        // Ya existe registro - Aplicar lógica de precedencia de estados
+        const previousStatus = existingAttendance.status;
+        let finalStatus = status;
+
+        // Lógica de precedencia de estados:
+        // 1. Una vez "Late", siempre "Late" (excepto si se va = "Absent")
+        if (previousStatus === 'Late' && status === 'Present') {
+          finalStatus = 'Late'; // Mantener "Late" si ya estaba marcado como tal
+        }
+        
+        // 2. Si estaba "Absent" y ahora es "Present", se marca como "Late" (llegó tarde)
+        if (previousStatus === 'Absent' && status === 'Present') {
+          finalStatus = 'Late'; // Llegó tarde después de estar ausente
+        }
+        
+        await AttendanceModel.update({
+          status: finalStatus,
+          attendance_time: currentTime, // Actualizar con la hora del nuevo sondeo
+        }, { 
+          where: { id_attendance: existingAttendance.id_attendance } 
+        });
+
+        // Obtener el registro actualizado
+        attendanceRecord = await AttendanceModel.findByPk(existingAttendance.id_attendance);
+        
+        actionTaken = "updated";
+        
+        // Log para debugging (opcional)
+        console.log(`Attendance updated - Student: ${id_student}, Class: ${id_class}, Previous: ${previousStatus}, New: ${status}, Final: ${finalStatus}, Time: ${currentTime}`);
+      }
+
+      // Validar que el registro existe antes de continuar
+      if (!attendanceRecord) {
+        return res.status(500).json({ message: "Error al procesar el registro de asistencia" });
+      }
+
+      // Obtener el registro final con información completa
+      const finalRecord = await AttendanceModel.findByPk(attendanceRecord.id_attendance, {
+        include: [
+          {
+            model: UsersModel,
+            attributes: ['id_user', 'name', 'email']
+          },
+          {
+            model: ClassesModel,
+            attributes: ['id_class', 'name', 'class_code', 'group_name']
+          }
+        ]
+      });
+
+      res.status(200).json({
+        message: `Asistencia ${actionTaken === 'created' ? 'registrada' : 'actualizada'} exitosamente por dispositivo`,
+        action: actionTaken,
+        attendance: finalRecord,
+        device_scan_time: currentTime,
+        scan_date: currentDate
+      });
+
+    } catch (error) {
+      console.error('Error in handleDeviceAttendanceStatus:', error);
+      res.status(500).json({ error: (error as Error).message });
+    }
+  },
 };
 
 export default attendanceController;
