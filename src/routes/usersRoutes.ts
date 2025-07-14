@@ -17,8 +17,8 @@ router.patch("/users/:id", authMiddleware, usersController.partialUpdateUser as 
 router.delete("/users/:id", authMiddleware, usersController.deleteUser as any);
 
 // Password management routes
-router.post("/users/cambiarContrasena", usersController.changePassword as any);
-router.post("/users/enviarCorreoCambioContrasena", usersController.sendPasswordResetEmail as any);
+router.post("/users/changePass", usersController.changePassword as any);
+router.post("/users/emailChangePass", usersController.sendPasswordResetEmail as any);
 
 // Database utilities
 router.get("/clear", usersController.clearDatabase as any);
