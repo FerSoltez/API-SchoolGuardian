@@ -3,6 +3,7 @@ import { InferAttributes, InferCreationAttributes } from "sequelize";
 import AttendanceModel from "../models/attendance";
 import ClassesModel from "../models/classes";
 import UsersModel from "../models/users";
+import EnrollmentsModel from "../models/enrollments";
 import jwt from "jsonwebtoken";
 import { Op } from "sequelize";
 
@@ -509,6 +510,222 @@ const attendanceController = {
 
     } catch (error) {
       console.error('Error in handleDeviceAttendanceStatus:', error);
+      res.status(500).json({ error: (error as Error).message });
+    }
+  },
+
+  // Crear múltiples asistencias (Solo profesores - Asistencia masiva)
+  createBulkAttendance: async (req: Request, res: Response) => {
+    try {
+      const { attendance_date, id_class, attendances } = req.body;
+
+      // Validar que los campos requeridos estén presentes
+      if (!attendance_date || !id_class || !attendances || !Array.isArray(attendances)) {
+        return res.status(400).json({ 
+          message: "Campos requeridos: attendance_date, id_class, attendances (array)" 
+        });
+      }
+
+      if (attendances.length === 0) {
+        return res.status(400).json({ 
+          message: "El array de asistencias no puede estar vacío" 
+        });
+      }
+
+      // Validar que la clase existe
+      const classExists = await ClassesModel.findByPk(id_class);
+      if (!classExists) {
+        return res.status(404).json({ message: "Clase no encontrada" });
+      }
+
+      // Obtener todos los estudiantes inscritos en la clase
+      const enrolledStudents = await EnrollmentsModel.findAll({
+        where: { id_class },
+        include: [
+          {
+            model: UsersModel,
+            where: { role: 'Student' },
+            attributes: ['id_user', 'name', 'email']
+          }
+        ]
+      });
+
+      if (enrolledStudents.length === 0) {
+        return res.status(404).json({ message: "No hay estudiantes inscritos en esta clase" });
+      }
+
+      // Crear un mapa de estudiantes enviados en el JSON
+      const attendanceMap = new Map();
+      attendances.forEach((attendance: any, index: number) => {
+        attendanceMap.set(attendance.id_student, { ...attendance, index });
+      });
+
+      const results: {
+        created: any[];
+        updated: any[];
+        marked_absent: any[];
+        errors: any[];
+        summary: {
+          total_enrolled: number;
+          sent_in_json: number;
+          marked_absent_count: number;
+          successful: number;
+          failed: number;
+        };
+      } = {
+        created: [],
+        updated: [],
+        marked_absent: [],
+        errors: [],
+        summary: {
+          total_enrolled: enrolledStudents.length,
+          sent_in_json: attendances.length,
+          marked_absent_count: 0,
+          successful: 0,
+          failed: 0
+        }
+      };
+
+      // Procesar todos los estudiantes inscritos
+      for (const enrollment of enrolledStudents) {
+        const id_student = enrollment.id_student;
+        const student = (enrollment as any).User;
+        
+        let attendance_time: string;
+        let status: 'Present' | 'Late' | 'Absent' | 'Justified';
+        let isFromJson = false;
+        let jsonIndex = -1;
+
+        try {
+          // Verificar si el estudiante está en el JSON enviado
+          if (attendanceMap.has(id_student)) {
+            const attendanceData = attendanceMap.get(id_student);
+            attendance_time = attendanceData.attendance_time;
+            status = attendanceData.status as 'Present' | 'Late' | 'Absent' | 'Justified';
+            isFromJson = true;
+            jsonIndex = attendanceData.index;
+
+            // Validar campos requeridos para asistencias del JSON
+            if (!attendance_time || !status) {
+              results.errors.push({
+                index: jsonIndex,
+                id_student,
+                student_name: student.name,
+                error: "Campos requeridos: attendance_time, status"
+              });
+              results.summary.failed++;
+              continue;
+            }
+          } else {
+            // Estudiante no está en el JSON - marcar como ausente
+            const now = new Date();
+            const mexicoTime = new Date(now.getTime() - (6 * 60 * 60 * 1000)); // GMT-6
+            attendance_time = mexicoTime.toTimeString().split(' ')[0]; // HH:MM:SS
+            status = 'Absent';
+          }
+
+          // Verificar si ya existe una asistencia para este estudiante en esta fecha y clase
+          const existingAttendance = await AttendanceModel.findOne({
+            where: {
+              id_student,
+              id_class,
+              attendance_date: attendance_date,
+            },
+          });
+
+          if (existingAttendance) {
+            // Actualizar asistencia existente
+            await AttendanceModel.update({
+              attendance_time,
+              status,
+            }, { 
+              where: { id_attendance: existingAttendance.id_attendance } 
+            });
+
+            const updatedRecord = await AttendanceModel.findByPk(existingAttendance.id_attendance, {
+              include: [
+                {
+                  model: UsersModel,
+                  attributes: ['id_user', 'name', 'email']
+                }
+              ]
+            });
+
+            if (isFromJson) {
+              results.updated.push({
+                index: jsonIndex,
+                attendance: updatedRecord,
+                action: "updated"
+              });
+            } else {
+              results.marked_absent.push({
+                attendance: updatedRecord,
+                action: "marked_absent_automatically",
+                reason: "Student not included in JSON"
+              });
+              results.summary.marked_absent_count++;
+            }
+          } else {
+            // Crear nueva asistencia
+            const newAttendance = await AttendanceModel.create({
+              id_student,
+              id_class,
+              attendance_date: new Date(attendance_date),
+              attendance_time,
+              status,
+            });
+
+            const newRecord = await AttendanceModel.findByPk(newAttendance.id_attendance, {
+              include: [
+                {
+                  model: UsersModel,
+                  attributes: ['id_user', 'name', 'email']
+                }
+              ]
+            });
+
+            if (isFromJson) {
+              results.created.push({
+                index: jsonIndex,
+                attendance: newRecord,
+                action: "created"
+              });
+            } else {
+              results.marked_absent.push({
+                attendance: newRecord,
+                action: "created_as_absent",
+                reason: "Student not included in JSON"
+              });
+              results.summary.marked_absent_count++;
+            }
+          }
+
+          results.summary.successful++;
+
+        } catch (attendanceError) {
+          results.errors.push({
+            index: isFromJson ? jsonIndex : -1,
+            id_student,
+            student_name: student.name,
+            error: (attendanceError as Error).message
+          });
+          results.summary.failed++;
+        }
+      }
+
+      res.status(200).json({
+        message: `Proceso de asistencia masiva completado. ${results.summary.successful} exitosos, ${results.summary.failed} fallidos. ${results.summary.marked_absent_count} marcados como ausentes automáticamente.`,
+        class_info: {
+          id: classExists.id_class,
+          name: classExists.name,
+          class_code: classExists.class_code,
+          group_name: classExists.group_name
+        },
+        attendance_date: attendance_date,
+        results: results
+      });
+
+    } catch (error) {
       res.status(500).json({ error: (error as Error).message });
     }
   },
