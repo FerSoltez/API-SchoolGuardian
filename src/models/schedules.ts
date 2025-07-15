@@ -4,7 +4,7 @@ import { sequelize } from '../config/database';
 interface SchedulesAttributes {
   id_schedule: number;
   id_class: number;
-  id_device: number;
+  id_device: string;
   weekday: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
   start_time: string;
   end_time: string;
@@ -15,7 +15,7 @@ interface SchedulesCreationAttributes extends Optional<SchedulesAttributes, "id_
 class SchedulesModel extends Model<SchedulesAttributes, SchedulesCreationAttributes> implements SchedulesAttributes {
   public id_schedule!: number;
   public id_class!: number;
-  public id_device!: number;
+  public id_device!: string;
   public weekday!: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
   public start_time!: string;
   public end_time!: string;
@@ -33,7 +33,7 @@ SchedulesModel.init(
       allowNull: false,
     },
     id_device: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.STRING(50),
       allowNull: false,
     },
     weekday: {

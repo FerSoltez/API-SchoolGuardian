@@ -2,7 +2,7 @@ import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from '../config/database';
 
 interface DevicesAttributes {
-  id_device: number;
+  id_device: string;
   location: string;
   status: 'Active' | 'Sleep' | 'Off';
 }
@@ -10,7 +10,7 @@ interface DevicesAttributes {
 interface DevicesCreationAttributes extends Optional<DevicesAttributes, "id_device"> {}
 
 class DevicesModel extends Model<DevicesAttributes, DevicesCreationAttributes> implements DevicesAttributes {
-  public id_device!: number;
+  public id_device!: string;
   public location!: string;
   public status!: 'Active' | 'Sleep' | 'Off';
 }
@@ -18,9 +18,18 @@ class DevicesModel extends Model<DevicesAttributes, DevicesCreationAttributes> i
 DevicesModel.init(
   {
     id_device: {
-      type: DataTypes.INTEGER,
-      autoIncrement: true,
+      type: DataTypes.STRING(50),
       primaryKey: true,
+      allowNull: false,
+      validate: {
+        notEmpty: {
+          msg: 'El ID del dispositivo no puede estar vacío'
+        },
+        len: {
+          args: [1, 50],
+          msg: 'El ID del dispositivo debe tener entre 1 y 50 caracteres'
+        }
+      }
     },
     location: {
       type: DataTypes.STRING(100),

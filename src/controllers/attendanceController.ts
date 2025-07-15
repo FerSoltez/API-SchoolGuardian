@@ -4,10 +4,132 @@ import AttendanceModel from "../models/attendance";
 import ClassesModel from "../models/classes";
 import UsersModel from "../models/users";
 import EnrollmentsModel from "../models/enrollments";
+import SchedulesModel from "../models/schedules";
+import DevicesModel from "../models/devices";
 import jwt from "jsonwebtoken";
 import { Op } from "sequelize";
 
 type AttendanceCreationAttributes = InferCreationAttributes<AttendanceModel>;
+
+// Función helper para verificar si hay clase en ese día y hora
+const verifyClassSchedule = async (id_class: number, attendance_date: string, attendance_time: string) => {
+  try {
+    // Obtener el día de la semana de la fecha
+    const date = new Date(attendance_date);
+    const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const weekday = weekdays[date.getDay()];
+
+    // Buscar si hay un horario para esta clase en este día
+    const schedule = await SchedulesModel.findOne({
+      where: {
+        id_class,
+        weekday: weekday as 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday'
+      }
+    });
+
+    if (!schedule) {
+      return {
+        hasClass: false,
+        message: `No hay clase programada para ${weekday} en esta clase`
+      };
+    }
+
+    // Verificar si la hora de asistencia está dentro del horario de clase
+    const attendanceTimeMinutes = timeToMinutes(attendance_time);
+    const startTimeMinutes = timeToMinutes(schedule.start_time);
+    const endTimeMinutes = timeToMinutes(schedule.end_time);
+
+    if (attendanceTimeMinutes < startTimeMinutes || attendanceTimeMinutes > endTimeMinutes) {
+      return {
+        hasClass: false,
+        message: `La hora ${attendance_time} está fuera del horario de clase (${schedule.start_time} - ${schedule.end_time})`
+      };
+    }
+
+    return {
+      hasClass: true,
+      schedule: schedule
+    };
+  } catch (error) {
+    throw new Error(`Error al verificar horario de clase: ${(error as Error).message}`);
+  }
+};
+
+// Función helper para convertir tiempo a minutos
+const timeToMinutes = (time: string): number => {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+};
+
+// Función helper para determinar la clase actual basándose en el dispositivo y la hora
+const getCurrentClassByDevice = async (id_device: string, attendance_time: string) => {
+  try {
+    // Verificar que el dispositivo existe
+    const device = await DevicesModel.findOne({
+      where: { id_device }
+    });
+
+    if (!device) {
+      return {
+        hasClass: false,
+        message: `Dispositivo con ID ${id_device} no encontrado`
+      };
+    }
+
+    // Extraer fecha y hora del attendance_time (formato ISO: 2025-07-14T15:30:00Z)
+    const dateTime = new Date(attendance_time);
+    const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const weekday = weekdays[dateTime.getDay()];
+    const timeOnly = dateTime.toTimeString().split(' ')[0]; // HH:MM:SS
+
+    // Buscar si hay una clase programada para este dispositivo en este día y hora
+    const schedule = await SchedulesModel.findOne({
+      where: {
+        id_device,
+        weekday: weekday as 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday'
+      },
+      include: [
+        {
+          model: ClassesModel,
+          attributes: ['id_class', 'name', 'class_code', 'group_name']
+        }
+      ]
+    });
+
+    if (!schedule) {
+      return {
+        hasClass: false,
+        message: `No hay clase programada para el dispositivo ${id_device} en ${weekday}`
+      };
+    }
+
+    // Verificar si la hora está dentro del horario de clase
+    const attendanceTimeMinutes = timeToMinutes(timeOnly);
+    const startTimeMinutes = timeToMinutes(schedule.start_time);
+    const endTimeMinutes = timeToMinutes(schedule.end_time);
+
+    if (attendanceTimeMinutes < startTimeMinutes || attendanceTimeMinutes > endTimeMinutes) {
+      return {
+        hasClass: false,
+        message: `La hora ${timeOnly} está fuera del horario de clase (${schedule.start_time} - ${schedule.end_time}) para el dispositivo ${id_device}`
+      };
+    }
+
+    // Obtener información completa de la clase
+    const classInfo = await ClassesModel.findByPk(schedule.id_class);
+
+    return {
+      hasClass: true,
+      schedule: schedule,
+      classInfo: classInfo,
+      device: device,
+      extractedDate: dateTime.toISOString().split('T')[0], // YYYY-MM-DD
+      extractedTime: timeOnly // HH:MM:SS
+    };
+  } catch (error) {
+    throw new Error(`Error al determinar la clase actual: ${(error as Error).message}`);
+  }
+};
 
 const attendanceController = {
   // Crear asistencia (Solo profesores pueden registrar asistencia)
@@ -36,6 +158,14 @@ const attendanceController = {
         return res.status(404).json({ message: "Clase no encontrada" });
       }
 
+      // Verificar si hay clase programada en ese día y hora
+      const scheduleCheck = await verifyClassSchedule(id_class, attendance_date, attendance_time);
+      if (!scheduleCheck.hasClass) {
+        return res.status(400).json({ 
+          message: scheduleCheck.message 
+        });
+      }
+
       // Verificar si ya existe una asistencia para el estudiante en la clase en la misma fecha
       const existingAttendance = await AttendanceModel.findOne({
         where: {
@@ -47,7 +177,7 @@ const attendanceController = {
 
       if (existingAttendance) {
         return res.status(400).json({ 
-          message: "El estudiante ya tiene una asistencia registrada para esta fecha en esta clase." 
+          message: "El estudiante ya tiene una asistencia registrada para esta fecha en esta clase. Use PATCH para actualizar el estado." 
         });
       }
 
@@ -76,7 +206,11 @@ const attendanceController = {
 
       res.status(201).json({
         message: "Asistencia registrada exitosamente",
-        attendance: attendanceWithDetails
+        attendance: attendanceWithDetails,
+        schedule_info: {
+          weekday: scheduleCheck.schedule?.weekday,
+          class_time: `${scheduleCheck.schedule?.start_time} - ${scheduleCheck.schedule?.end_time}`
+        }
       });
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
@@ -514,15 +648,15 @@ const attendanceController = {
     }
   },
 
-  // Crear múltiples asistencias (Solo profesores - Asistencia masiva)
-  createBulkAttendance: async (req: Request, res: Response) => {
+  // Crear asistencias basándose en dispositivo (Solo profesores - Asistencia por dispositivo)
+  createAttendanceByDevice: async (req: Request, res: Response) => {
     try {
-      const { attendance_date, id_class, attendances } = req.body;
+      const { id_device, attendances } = req.body;
 
       // Validar que los campos requeridos estén presentes
-      if (!attendance_date || !id_class || !attendances || !Array.isArray(attendances)) {
+      if (!id_device || !attendances || !Array.isArray(attendances)) {
         return res.status(400).json({ 
-          message: "Campos requeridos: attendance_date, id_class, attendances (array)" 
+          message: "Campos requeridos: id_device, attendances (array)" 
         });
       }
 
@@ -532,11 +666,28 @@ const attendanceController = {
         });
       }
 
-      // Validar que la clase existe
-      const classExists = await ClassesModel.findByPk(id_class);
-      if (!classExists) {
-        return res.status(404).json({ message: "Clase no encontrada" });
+      // Validar que todos los registros tengan los campos necesarios
+      for (let i = 0; i < attendances.length; i++) {
+        const attendance = attendances[i];
+        if (!attendance.id_student || !attendance.attendance_time) {
+          return res.status(400).json({ 
+            message: `Registro ${i}: Campos requeridos: id_student, attendance_time` 
+          });
+        }
       }
+
+      // Usar la primera asistencia para determinar la clase actual
+      const firstAttendance = attendances[0];
+      const classCheck = await getCurrentClassByDevice(id_device, firstAttendance.attendance_time);
+      
+      if (!classCheck.hasClass) {
+        return res.status(400).json({ 
+          message: classCheck.message 
+        });
+      }
+
+      const id_class = classCheck.schedule!.id_class;
+      const attendance_date = classCheck.extractedDate!;
 
       // Obtener todos los estudiantes inscritos en la clase
       const enrolledStudents = await EnrollmentsModel.findAll({
@@ -560,9 +711,42 @@ const attendanceController = {
         attendanceMap.set(attendance.id_student, { ...attendance, index });
       });
 
+      // Crear un Set de estudiantes inscritos para validación rápida
+      const enrolledStudentIds = new Set(enrolledStudents.map(enrollment => enrollment.id_student));
+
+      // Validar que todos los estudiantes del JSON estén inscritos en la clase
+      const invalidStudents: any[] = [];
+      for (let i = 0; i < attendances.length; i++) {
+        const attendance = attendances[i];
+        if (!enrolledStudentIds.has(attendance.id_student)) {
+          // Verificar si el estudiante existe en el sistema
+          const student = await UsersModel.findOne({
+            where: { id_user: attendance.id_student, role: 'Student' }
+          });
+          
+          invalidStudents.push({
+            index: i,
+            id_student: attendance.id_student,
+            student_name: student ? student.name : 'Estudiante no encontrado',
+            error: student ? 
+              `El estudiante ${student.name} no está inscrito en esta clase` : 
+              'Estudiante no encontrado en el sistema'
+          });
+        }
+      }
+
+      // Si hay estudiantes inválidos, devolver error
+      if (invalidStudents.length > 0) {
+        return res.status(400).json({
+          errors: invalidStudents.map(student => ({
+            student_id: student.id_student,
+            error: student.error
+          }))
+        });
+      }
+
       const results: {
         created: any[];
-        updated: any[];
         marked_absent: any[];
         errors: any[];
         summary: {
@@ -574,7 +758,6 @@ const attendanceController = {
         };
       } = {
         created: [],
-        updated: [],
         marked_absent: [],
         errors: [],
         summary: {
@@ -592,7 +775,8 @@ const attendanceController = {
         const student = (enrollment as any).User;
         
         let attendance_time: string;
-        let status: 'Present' | 'Late' | 'Absent' | 'Justified';
+        let attendance_date_final: string;
+        let status: 'Present' | 'Late' | 'Absent' | 'Justified' = 'Present';
         let isFromJson = false;
         let jsonIndex = -1;
 
@@ -600,27 +784,30 @@ const attendanceController = {
           // Verificar si el estudiante está en el JSON enviado
           if (attendanceMap.has(id_student)) {
             const attendanceData = attendanceMap.get(id_student);
-            attendance_time = attendanceData.attendance_time;
-            status = attendanceData.status as 'Present' | 'Late' | 'Absent' | 'Justified';
+            
+            // Extraer fecha y hora del attendance_time ISO
+            const dateTime = new Date(attendanceData.attendance_time);
+            attendance_date_final = dateTime.toISOString().split('T')[0]; // YYYY-MM-DD
+            attendance_time = dateTime.toTimeString().split(' ')[0]; // HH:MM:SS
+            
             isFromJson = true;
             jsonIndex = attendanceData.index;
-
-            // Validar campos requeridos para asistencias del JSON
-            if (!attendance_time || !status) {
+            
+            // Verificar que la fecha sea consistente
+            if (attendance_date_final !== attendance_date) {
               results.errors.push({
                 index: jsonIndex,
                 id_student,
                 student_name: student.name,
-                error: "Campos requeridos: attendance_time, status"
+                error: `Fecha inconsistente: esperada ${attendance_date}, recibida ${attendance_date_final}`
               });
               results.summary.failed++;
               continue;
             }
           } else {
             // Estudiante no está en el JSON - marcar como ausente
-            const now = new Date();
-            const mexicoTime = new Date(now.getTime() - (6 * 60 * 60 * 1000)); // GMT-6
-            attendance_time = mexicoTime.toTimeString().split(' ')[0]; // HH:MM:SS
+            attendance_date_final = attendance_date;
+            attendance_time = classCheck.extractedTime!;
             status = 'Absent';
           }
 
@@ -629,48 +816,58 @@ const attendanceController = {
             where: {
               id_student,
               id_class,
-              attendance_date: attendance_date,
+              attendance_date: attendance_date_final,
             },
           });
 
           if (existingAttendance) {
-            // Actualizar asistencia existente
-            await AttendanceModel.update({
-              attendance_time,
-              status,
-            }, { 
-              where: { id_attendance: existingAttendance.id_attendance } 
-            });
-
-            const updatedRecord = await AttendanceModel.findByPk(existingAttendance.id_attendance, {
-              include: [
-                {
-                  model: UsersModel,
-                  attributes: ['id_user', 'name', 'email']
-                }
-              ]
-            });
-
+            // Ya existe una asistencia - no se puede crear otra
             if (isFromJson) {
-              results.updated.push({
+              results.errors.push({
                 index: jsonIndex,
-                attendance: updatedRecord,
-                action: "updated"
+                id_student,
+                student_name: student.name,
+                error: "Ya existe una asistencia para este estudiante en esta fecha. Use PATCH para actualizar."
               });
+              results.summary.failed++;
             } else {
-              results.marked_absent.push({
-                attendance: updatedRecord,
-                action: "marked_absent_automatically",
-                reason: "Student not included in JSON"
-              });
-              results.summary.marked_absent_count++;
+              // Para estudiantes no en JSON, actualizar a ausente si no estaba ausente
+              if (existingAttendance.status !== 'Absent') {
+                await AttendanceModel.update({
+                  attendance_time,
+                  status: 'Absent',
+                }, { 
+                  where: { id_attendance: existingAttendance.id_attendance } 
+                });
+
+                const updatedRecord = await AttendanceModel.findByPk(existingAttendance.id_attendance, {
+                  include: [
+                    {
+                      model: UsersModel,
+                      attributes: ['id_user', 'name', 'email']
+                    }
+                  ]
+                });
+
+                results.marked_absent.push({
+                  attendance: updatedRecord,
+                  action: "updated_to_absent",
+                  reason: "Student not detected by device"
+                });
+                results.summary.marked_absent_count++;
+                results.summary.successful++;
+              } else {
+                // Ya estaba ausente, no hacer nada
+                results.summary.successful++;
+              }
             }
+            continue;
           } else {
             // Crear nueva asistencia
             const newAttendance = await AttendanceModel.create({
               id_student,
               id_class,
-              attendance_date: new Date(attendance_date),
+              attendance_date: new Date(attendance_date_final),
               attendance_time,
               status,
             });
@@ -694,7 +891,7 @@ const attendanceController = {
               results.marked_absent.push({
                 attendance: newRecord,
                 action: "created_as_absent",
-                reason: "Student not included in JSON"
+                reason: "Student not detected by device"
               });
               results.summary.marked_absent_count++;
             }
@@ -714,7 +911,185 @@ const attendanceController = {
       }
 
       res.status(200).json({
-        message: `Proceso de asistencia masiva completado. ${results.summary.successful} exitosos, ${results.summary.failed} fallidos. ${results.summary.marked_absent_count} marcados como ausentes automáticamente.`,
+        created: results.created.map(item => ({
+          student_id: item.attendance.id_student,
+          status: item.attendance.status
+        })),
+        marked_absent: results.marked_absent.map(item => ({
+          student_id: item.attendance.id_student,
+          status: "Absent"
+        })),
+        errors: results.errors.map(error => ({
+          student_id: error.id_student,
+          error: error.error
+        }))
+      });
+
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  },
+
+  // Actualizar múltiples asistencias (Solo profesores - PATCH masivo)
+  updateMultipleAttendances: async (req: Request, res: Response) => {
+    try {
+      const { attendance_date, id_class, updates } = req.body;
+
+      // Validar que los campos requeridos estén presentes
+      if (!attendance_date || !id_class || !updates || !Array.isArray(updates)) {
+        return res.status(400).json({ 
+          message: "Campos requeridos: attendance_date, id_class, updates (array)" 
+        });
+      }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ 
+          message: "El array de actualizaciones no puede estar vacío" 
+        });
+      }
+
+      // Validar que la clase existe
+      const classExists = await ClassesModel.findByPk(id_class);
+      if (!classExists) {
+        return res.status(404).json({ message: "Clase no encontrada" });
+      }
+
+      // Verificar si hay clase programada en ese día (usando la primera actualización como referencia para la hora)
+      const firstUpdate = updates[0];
+      if (firstUpdate.attendance_time) {
+        const scheduleCheck = await verifyClassSchedule(id_class, attendance_date, firstUpdate.attendance_time);
+        if (!scheduleCheck.hasClass) {
+          return res.status(400).json({ 
+            message: scheduleCheck.message 
+          });
+        }
+      }
+
+      const results: {
+        updated: any[];
+        not_found: any[];
+        errors: any[];
+        summary: {
+          total_processed: number;
+          successful: number;
+          failed: number;
+        };
+      } = {
+        updated: [],
+        not_found: [],
+        errors: [],
+        summary: {
+          total_processed: 0,
+          successful: 0,
+          failed: 0
+        }
+      };
+
+      // Procesar cada actualización en el array
+      for (let i = 0; i < updates.length; i++) {
+        const update = updates[i];
+        results.summary.total_processed++;
+
+        try {
+          const { id_student, attendance_time, status } = update;
+
+          // Validar campos requeridos para cada actualización
+          if (!id_student) {
+            results.errors.push({
+              index: i,
+              id_student: id_student || 'missing',
+              error: "Campo requerido: id_student"
+            });
+            results.summary.failed++;
+            continue;
+          }
+
+          // Validar que el estudiante existe y tiene rol de Student
+          const student = await UsersModel.findOne({
+            where: { id_user: id_student, role: 'Student' }
+          });
+          if (!student) {
+            results.errors.push({
+              index: i,
+              id_student,
+              error: "Estudiante no encontrado o no tiene rol de Student"
+            });
+            results.summary.failed++;
+            continue;
+          }
+
+          // Buscar la asistencia existente
+          const existingAttendance = await AttendanceModel.findOne({
+            where: {
+              id_student,
+              id_class,
+              attendance_date: attendance_date,
+            },
+          });
+
+          if (!existingAttendance) {
+            results.not_found.push({
+              index: i,
+              id_student,
+              student_name: student.name,
+              message: "No se encontró asistencia para este estudiante en esta fecha y clase"
+            });
+            results.summary.failed++;
+            continue;
+          }
+
+          // Preparar datos para actualización
+          const updateData: any = {};
+          if (attendance_time) updateData.attendance_time = attendance_time;
+          if (status) updateData.status = status;
+
+          // Si no hay nada que actualizar, continuar
+          if (Object.keys(updateData).length === 0) {
+            results.errors.push({
+              index: i,
+              id_student,
+              error: "No se proporcionaron campos para actualizar (attendance_time, status)"
+            });
+            results.summary.failed++;
+            continue;
+          }
+
+          // Actualizar la asistencia
+          await AttendanceModel.update(updateData, { 
+            where: { id_attendance: existingAttendance.id_attendance } 
+          });
+
+          // Obtener el registro actualizado
+          const updatedRecord = await AttendanceModel.findByPk(existingAttendance.id_attendance, {
+            include: [
+              {
+                model: UsersModel,
+                attributes: ['id_user', 'name', 'email']
+              }
+            ]
+          });
+
+          results.updated.push({
+            index: i,
+            attendance: updatedRecord,
+            action: "updated",
+            changes: updateData
+          });
+
+          results.summary.successful++;
+
+        } catch (attendanceError) {
+          results.errors.push({
+            index: i,
+            id_student: update.id_student || 'unknown',
+            error: (attendanceError as Error).message
+          });
+          results.summary.failed++;
+        }
+      }
+
+      res.status(200).json({
+        message: `Proceso de actualización masiva completado. ${results.summary.successful} exitosos, ${results.summary.failed} fallidos.`,
         class_info: {
           id: classExists.id_class,
           name: classExists.name,

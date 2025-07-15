@@ -10,8 +10,8 @@ const router = Router();
 // Crear asistencia (Solo profesores)
 router.post("/attendance", attendanceController.createAttendance as any);
 
-// Crear múltiples asistencias (Solo profesores - Asistencia masiva)
-router.post("/attendance/bulk", attendanceController.createBulkAttendance as any);
+// Crear asistencias basándose en dispositivo (Solo profesores - Asistencia por dispositivo)
+router.post("/attendance/device", attendanceController.createAttendanceByDevice as any);
 
 // Manejar status de asistencia desde dispositivo (sondeo automático) - PATCH porque actualiza/crea
 router.patch("/attendance/device-status", attendanceController.handleDeviceAttendanceStatus as any);
@@ -24,6 +24,9 @@ router.post("/attendance/detalle", authMiddleware, attendanceController.getAtten
 
 // Actualizar asistencia (Solo profesores)
 router.patch("/attendance/:id", authMiddleware, roleMiddleware(["Professor"]), attendanceController.updateAttendance as any);
+
+// Actualizar múltiples asistencias (Solo profesores - PATCH masivo)
+router.patch("/attendance/bulk", authMiddleware, roleMiddleware(["Professor"]), attendanceController.updateMultipleAttendances as any);
 
 // Eliminar asistencia (Solo profesores)
 router.delete("/attendance/:id", authMiddleware, roleMiddleware(["Professor"]), attendanceController.deleteAttendance as any);
