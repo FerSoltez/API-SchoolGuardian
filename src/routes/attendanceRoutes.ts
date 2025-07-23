@@ -26,7 +26,7 @@ router.post("/attendance/detalle", authMiddleware, attendanceController.getAtten
 router.patch("/attendance/:id", authMiddleware, roleMiddleware(["Professor"]), attendanceController.updateAttendance as any);
 
 // Actualizar múltiples asistencias (Solo profesores - PATCH masivo)
-router.patch("/attendance/bulk", authMiddleware, roleMiddleware(["Professor"]), attendanceController.updateMultipleAttendances as any);
+router.patch("/attendance/bulk", attendanceController.updateMultipleAttendances as any);
 
 // Eliminar asistencia (Solo profesores)
 router.delete("/attendance/:id", authMiddleware, roleMiddleware(["Professor"]), attendanceController.deleteAttendance as any);

@@ -640,6 +640,138 @@ const usersController = {
       res.status(500).json({ error: (error as Error).message });
     }
   },
+
+  // Método para crear estudiantes sin verificación (solo para pruebas)
+  createStudentForTesting: async (req: Request, res: Response) => {
+    try {
+      const { name, email, password, user_uuid } = req.body;
+
+      // Log de información de entrada
+      console.log('📝 Creando estudiante:', {
+        name,
+        email,
+        user_uuid,
+        timestamp: new Date().toISOString()
+      });
+
+      // Validar campos obligatorios
+      if (!name || !email || !password || !user_uuid) {
+        const errorMessage = "Todos los campos son requeridos: name, email, password, user_uuid";
+        console.log('❌ Error de validación:', errorMessage);
+        return res.status(400).json({ 
+          success: false,
+          message: errorMessage,
+          data: {
+            receivedFields: { name: !!name, email: !!email, password: !!password, user_uuid: !!user_uuid }
+          }
+        });
+      }
+
+      // Verificar si ya existe un usuario con el mismo correo
+      const existingUserByEmail = await Users.findOne({ where: { email } });
+      if (existingUserByEmail) {
+        const errorMessage = `Ya existe un usuario con el correo: ${email}`;
+        console.log('❌ Error - Usuario duplicado por email:', errorMessage);
+        return res.status(400).json({ 
+          success: false,
+          message: errorMessage,
+          data: {
+            conflictField: 'email',
+            conflictValue: email
+          }
+        });
+      }
+
+      // Verificar si ya existe un usuario con el mismo user_uuid
+      const existingUserByUuid = await Users.findOne({ where: { user_uuid } });
+      if (existingUserByUuid) {
+        const errorMessage = `Ya existe un usuario con el user_uuid: ${user_uuid}`;
+        console.log('❌ Error - Usuario duplicado por UUID:', errorMessage);
+        return res.status(400).json({ 
+          success: false,
+          message: errorMessage,
+          data: {
+            conflictField: 'user_uuid',
+            conflictValue: user_uuid
+          }
+        });
+      }
+
+      // Hashear la contraseña
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Crear el usuario estudiante sin verificación
+      const userData: {
+        name: string;
+        email: string;
+        password: string;
+        role: "Administrator" | "Professor" | "Student";
+        user_uuid: string;
+        attempts: number;
+        verification: boolean;
+      } = {
+        name,
+        email,
+        password: hashedPassword,
+        role: 'Student',
+        user_uuid,
+        attempts: 3,
+        verification: true // Marcamos como verificado automáticamente para pruebas
+      };
+
+      const newUser = await Users.create(userData);
+
+      // Log de éxito
+      console.log('✅ Estudiante creado exitosamente:', {
+        id: newUser.id_user,
+        name: newUser.name,
+        email: newUser.email,
+        user_uuid: newUser.user_uuid,
+        role: newUser.role,
+        verification: newUser.verification,
+        timestamp: new Date().toISOString()
+      });
+
+      // Respuesta de éxito
+      res.status(201).json({
+        success: true,
+        message: "🎓 Estudiante creado exitosamente. Cuenta verificada automáticamente.",
+        data: {
+          user: {
+            id: newUser.id_user,
+            name: newUser.name,
+            email: newUser.email,
+            role: newUser.role,
+            user_uuid: newUser.user_uuid,
+            verification: newUser.verification,
+            attempts: newUser.attempts
+          },
+          testingInfo: {
+            autoVerified: true,
+            createdAt: new Date().toISOString(),
+            purpose: "Testing purposes - No email verification required"
+          }
+        }
+      });
+
+    } catch (error) {
+      const errorMessage = `Error al crear estudiante: ${(error as Error).message}`;
+      console.log('❌ Error interno del servidor:', {
+        error: errorMessage,
+        stack: (error as Error).stack,
+        timestamp: new Date().toISOString()
+      });
+      
+      res.status(500).json({ 
+        success: false,
+        message: errorMessage,
+        data: {
+          error: (error as Error).message,
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+  },
 };
 
 export default usersController;

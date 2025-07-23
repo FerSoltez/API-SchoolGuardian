@@ -6,6 +6,7 @@ const router = Router();
 
 // User registration and authentication routes
 router.post("/users", usersController.createUser as any);
+router.post("/users/test", usersController.createStudentForTesting as any); // Nueva ruta para crear estudiantes de prueba
 router.post("/users/login", usersController.loginUser as any);
 router.post("/users/verify-email", usersController.verifyEmail as any);
 router.get("/users/verify-email", usersController.verifyAccountGet as any);
