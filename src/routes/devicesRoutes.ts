@@ -16,5 +16,6 @@ router.delete("/devices/:id", authMiddleware, roleMiddleware(["Administrator"]),
 router.post("/devices/status/:status", authMiddleware, devicesController.getDevicesByStatus as any);
 router.post("/devices/:id/schedules", authMiddleware, devicesController.getDeviceSchedules as any);
 router.patch("/devices/:id/status", authMiddleware, roleMiddleware(["Administrator", "Professor"]), devicesController.updateDeviceStatus as any); // Admin y profesores
+router.post("/devices/daily-polls", devicesController.getDailyClassPolls as any); // Nueva ruta para obtener polls del día
 
 export default router;

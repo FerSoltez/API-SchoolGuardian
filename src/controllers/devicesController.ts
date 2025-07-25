@@ -291,6 +291,122 @@ const devicesController = {
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
     }
+  },
+
+  // Método para obtener los horarios de polls de las clases del día
+  getDailyClassPolls: async (req: Request, res: Response) => {
+    try {
+      const { id_device } = req.body;
+
+      // Validar que se proporcione el id_device
+      if (!id_device) {
+        return res.status(400).json({ 
+          success: false,
+          message: "El id_device es requerido." 
+        });
+      }
+
+      // Verificar que el dispositivo existe
+      const device = await Devices.findByPk(id_device);
+      if (!device) {
+        return res.status(404).json({ 
+          success: false,
+          message: `No se encontró un dispositivo con el ID: ${id_device}` 
+        });
+      }
+
+      // Obtener el día actual de la semana en inglés
+      const currentDate = new Date();
+      const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const currentWeekday = weekdays[currentDate.getDay()];
+
+      console.log(`📅 Buscando clases para el dispositivo ${id_device} en ${currentWeekday}`);
+
+      // Buscar horarios del dispositivo para el día actual, incluyendo información de la clase
+      const schedules = await Schedules.findAll({
+        where: {
+          id_device: id_device,
+          weekday: currentWeekday
+        },
+        include: [{
+          model: Classes,
+          attributes: ['name', 'group_name', 'class_code']
+        }],
+        order: [['start_time', 'ASC']]
+      });
+
+      if (schedules.length === 0) {
+        return res.status(200).json({
+          success: true,
+          message: `No hay clases programadas para el dispositivo ${id_device} el día ${currentWeekday}`,
+          data: {
+            device_id: id_device,
+            weekday: currentWeekday,
+            polls: []
+          }
+        });
+      }
+
+      // Función para calcular los horarios de poll
+      const calculatePollTimes = (startTime: string, endTime: string) => {
+        // Convertir tiempos a minutos desde medianoche
+        const timeToMinutes = (time: string): number => {
+          const [hours, minutes] = time.split(':').map(Number);
+          return hours * 60 + minutes;
+        };
+
+        // Convertir minutos a formato HH:MM
+        const minutesToTime = (totalMinutes: number): string => {
+          const hours = Math.floor(totalMinutes / 60);
+          const minutes = totalMinutes % 60;
+          return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        };
+
+        const startMinutes = timeToMinutes(startTime);
+        const endMinutes = timeToMinutes(endTime);
+        const durationMinutes = endMinutes - startMinutes;
+
+        // Poll 1: 10 minutos después del inicio
+        const poll1Minutes = startMinutes + 10;
+        
+        // Poll 2: Mitad de la clase
+        const poll2Minutes = startMinutes + Math.floor(durationMinutes / 2);
+        
+        // Poll 3: 10 minutos antes del final
+        const poll3Minutes = endMinutes - 10;
+
+        return {
+          poll1: minutesToTime(poll1Minutes),
+          poll2: minutesToTime(poll2Minutes),
+          poll3: minutesToTime(poll3Minutes)
+        };
+      };
+
+      // Generar polls para cada clase (formato simplificado como solicitado)
+      const polls = schedules.map((schedule: any) => {
+        const pollTimes = calculatePollTimes(schedule.start_time, schedule.end_time);
+        
+        console.log(`⏰ Clase: ${schedule.Class?.name || 'N/A'} (${schedule.start_time} - ${schedule.end_time})`);
+        console.log(`   Polls: ${pollTimes.poll1}, ${pollTimes.poll2}, ${pollTimes.poll3}`);
+
+        return pollTimes; // Solo retornar los horarios de poll
+      });
+
+      console.log(`✅ Se generaron ${polls.length} sets de polls para ${schedules.length} clases`);
+
+      // Respuesta en el formato solicitado
+      res.status(200).json({
+        polls: polls
+      });
+
+    } catch (error) {
+      console.error('❌ Error al obtener polls de clases:', error);
+      res.status(500).json({ 
+        success: false,
+        message: "Error interno del servidor al obtener los horarios de polls",
+        error: (error as Error).message 
+      });
+    }
   }
 };
 
