@@ -252,7 +252,7 @@ const handleMultipleAttendances = async (req: Request, res: Response) => {
     
     let attendance_time: string;
     let attendance_date_final: string;
-    let status: 'Present' | 'Late' | 'Absent' | 'Justified' = 'Present';
+    let status: 'Present' | 'Absent' | 'Late' | 'Justified' = 'Present';
     let isFromJson = false;
 
     try {
@@ -295,7 +295,7 @@ const handleMultipleAttendances = async (req: Request, res: Response) => {
       if (existingAttendance) {
         // Actualizar registro existente - Aplicar lógica de precedencia de estados
         const previousStatus = existingAttendance.status;
-        let finalStatus = status;
+        let finalStatus: 'Present' | 'Absent' | 'Late' | 'Justified' = status;
 
         // Lógica de precedencia de estados:
         // 1. Una vez "Late", siempre "Late" (excepto si se va = "Absent")
