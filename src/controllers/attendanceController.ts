@@ -138,15 +138,17 @@ const handleMultipleAttendances = async (req: Request, res: Response) => {
   // Validar que los campos requeridos estén presentes
   if (!id_device || !attendances || !Array.isArray(attendances)) {
     return res.status(400).json({ 
-      success: false,
-      message: "Campos requeridos: id_device, attendances (array)" 
+      created: [],
+      marked_absent: [],
+      errors: [{ student_id: 'N/A', error: "Campos requeridos: id_device, attendances (array)" }]
     });
   }
 
   if (attendances.length === 0) {
     return res.status(400).json({ 
-      success: false,
-      message: "El array de asistencias no puede estar vacío" 
+      created: [],
+      marked_absent: [],
+      errors: [{ student_id: 'N/A', error: "El array de asistencias no puede estar vacío" }]
     });
   }
 
@@ -154,125 +156,165 @@ const handleMultipleAttendances = async (req: Request, res: Response) => {
   const device = await DevicesModel.findByPk(id_device);
   if (!device) {
     return res.status(404).json({ 
-      success: false,
-      message: `Dispositivo con ID ${id_device} no encontrado` 
+      created: [],
+      marked_absent: [],
+      errors: [{ student_id: 'N/A', error: `Dispositivo con ID ${id_device} no encontrado` }]
     });
   }
 
-  // Obtener fecha y hora actual
-  const now = new Date();
-  const currentDate = now.toISOString().split('T')[0]; // YYYY-MM-DD
-  const currentWeekday = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][now.getDay()];
+  // Usar el primer attendance_time para determinar la clase actual
+  const firstAttendance = attendances[0];
+  if (!firstAttendance.attendance_time) {
+    return res.status(400).json({
+      created: [],
+      marked_absent: [],
+      errors: [{ student_id: 'N/A', error: "Se requiere attendance_time para determinar la clase" }]
+    });
+  }
 
-  // Buscar qué clase está programada ahora para este dispositivo
-  const currentClass = await SchedulesModel.findOne({
-    where: {
-      id_device: id_device,
-      weekday: currentWeekday
-    },
-    include: [{
-      model: ClassesModel,
-      attributes: ['id_class', 'name', 'class_code', 'group_name']
-    }],
-    order: [['start_time', 'ASC']]
+  const classCheck = await getCurrentClassByDevice(id_device, firstAttendance.attendance_time);
+  
+  if (!classCheck.hasClass) {
+    return res.status(400).json({ 
+      created: [],
+      marked_absent: [],
+      errors: [{ student_id: 'N/A', error: classCheck.message }]
+    });
+  }
+
+  const id_class = classCheck.schedule!.id_class;
+  const attendance_date = classCheck.extractedDate!;
+
+  // Obtener todos los estudiantes inscritos en la clase
+  const enrolledStudents = await EnrollmentsModel.findAll({
+    where: { id_class },
+    include: [
+      {
+        model: UsersModel,
+        where: { role: 'Student' },
+        attributes: ['id_user', 'name', 'email']
+      }
+    ]
   });
 
-  if (!currentClass) {
-    return res.status(400).json({ 
-      success: false,
-      message: `No hay clases programadas para el dispositivo ${id_device} el día ${currentWeekday}` 
+  if (enrolledStudents.length === 0) {
+    return res.status(404).json({ 
+      created: [],
+      marked_absent: [],
+      errors: [{ student_id: 'N/A', error: "No hay estudiantes inscritos en esta clase" }]
     });
   }
 
-  const id_class = currentClass.id_class;
+  // Crear un mapa de estudiantes enviados en el JSON
+  const attendanceMap = new Map();
+  attendances.forEach((attendance: any, index: number) => {
+    attendanceMap.set(attendance.id_student, { ...attendance, index });
+  });
 
-  console.log(`📱 Procesando ${attendances.length} asistencias para dispositivo ${id_device}, clase ${id_class}`);
+  // Crear un Set de estudiantes inscritos para validación rápida
+  const enrolledStudentIds = new Set(enrolledStudents.map(enrollment => enrollment.id_student));
+
+  // Validar que todos los estudiantes del JSON estén inscritos en la clase
+  const invalidStudents: any[] = [];
+  for (let i = 0; i < attendances.length; i++) {
+    const attendance = attendances[i];
+    if (!enrolledStudentIds.has(attendance.id_student)) {
+      // Verificar si el estudiante existe en el sistema
+      const student = await UsersModel.findOne({
+        where: { id_user: attendance.id_student, role: 'Student' }
+      });
+      
+      invalidStudents.push({
+        student_id: attendance.id_student,
+        error: student ? 
+          `El estudiante ${student.name} no está inscrito en esta clase` : 
+          'Estudiante no encontrado en el sistema'
+      });
+    }
+  }
 
   const results: {
     created: any[];
-    updated: any[];
+    marked_absent: any[];
     errors: any[];
-    summary: {
-      total_processed: number;
-      successful: number;
-      failed: number;
-    };
   } = {
     created: [],
-    updated: [],
-    errors: [],
-    summary: {
-      total_processed: 0,
-      successful: 0,
-      failed: 0
-    }
+    marked_absent: [],
+    errors: invalidStudents
   };
 
-  // Procesar cada asistencia en el array
-  for (let i = 0; i < attendances.length; i++) {
-    const attendance = attendances[i];
-    results.summary.total_processed++;
+  console.log(`📱 Procesando ${enrolledStudents.length} estudiantes inscritos para dispositivo ${id_device}, clase ${id_class}`);
+
+  // Procesar todos los estudiantes inscritos
+  for (const enrollment of enrolledStudents) {
+    const id_student = enrollment.id_student;
+    const student = (enrollment as any).User;
+    
+    let attendance_time: string;
+    let attendance_date_final: string;
+    let status: 'Present' | 'Late' | 'Absent' | 'Justified' = 'Present';
+    let isFromJson = false;
 
     try {
-      const { id_student, attendance_time } = attendance;
-
-      // Validar campos requeridos para cada asistencia
-      if (!id_student || !attendance_time) {
-        results.errors.push({
-          index: i,
-          id_student: id_student || 'missing',
-          error: "Campos requeridos: id_student, attendance_time"
-        });
-        results.summary.failed++;
-        continue;
+      // Verificar si el estudiante está en el JSON enviado
+      if (attendanceMap.has(id_student)) {
+        const attendanceData = attendanceMap.get(id_student);
+        
+        // Extraer fecha y hora del attendance_time ISO
+        const dateTime = new Date(attendanceData.attendance_time);
+        attendance_date_final = dateTime.toISOString().split('T')[0]; // YYYY-MM-DD
+        attendance_time = dateTime.toTimeString().split(' ')[0]; // HH:MM:SS
+        
+        isFromJson = true;
+        status = 'Present'; // Los estudiantes detectados por el dispositivo se marcan como Present
+        
+        // Verificar que la fecha sea consistente
+        if (attendance_date_final !== attendance_date) {
+          results.errors.push({
+            student_id: id_student,
+            error: `Fecha inconsistente: esperada ${attendance_date}, recibida ${attendance_date_final}`
+          });
+          continue;
+        }
+      } else {
+        // Estudiante no está en el JSON - marcar como ausente
+        attendance_date_final = attendance_date;
+        attendance_time = classCheck.extractedTime!;
+        status = 'Absent';
       }
 
-      // Validar que el estudiante existe y tiene rol de Student
-      const student = await UsersModel.findOne({
-        where: { id_user: id_student, role: 'Student' }
-      });
-      if (!student) {
-        results.errors.push({
-          index: i,
-          id_student,
-          error: "Estudiante no encontrado o no tiene rol de Student"
-        });
-        results.summary.failed++;
-        continue;
-      }
-
-      // Convertir attendance_time a formato de base de datos
-      const attendanceDate = new Date(attendance_time);
-      const dateOnly = attendanceDate.toISOString().split('T')[0];
-      const timeOnly = attendanceDate.toTimeString().split(' ')[0];
-
-      // Buscar si ya existe un registro de asistencia para ese estudiante y clase en esa fecha
+      // Buscar si ya existe un registro de asistencia para este estudiante en esta fecha y clase
       const existingAttendance = await AttendanceModel.findOne({
         where: {
           id_student,
           id_class,
-          attendance_date: dateOnly,
+          attendance_date: attendance_date_final,
         },
       });
 
       if (existingAttendance) {
         // Actualizar registro existente - Aplicar lógica de precedencia de estados
         const previousStatus = existingAttendance.status;
-        let finalStatus: 'Present' | 'Late' | 'Absent' | 'Justified' = 'Present'; // Por defecto, si se registra desde dispositivo es Present
+        let finalStatus = status;
 
         // Lógica de precedencia de estados:
         // 1. Una vez "Late", siempre "Late" (excepto si se va = "Absent")
-        if (previousStatus === 'Late' && finalStatus === 'Present') {
+        if (previousStatus === 'Late' && status === 'Present') {
           finalStatus = 'Late'; // Mantener "Late" si ya estaba marcado como tal
         }
         
         // 2. Si estaba "Absent" y ahora es "Present", se marca como "Late" (llegó tarde)
-        if (previousStatus === 'Absent' && finalStatus === 'Present') {
+        if (previousStatus === 'Absent' && status === 'Present') {
           finalStatus = 'Late'; // Llegó tarde después de estar ausente
         }
 
+        // 3. Si estaba "Present" o "Late" y ahora no está en el JSON, marcar como "Absent"
+        if (!isFromJson && (previousStatus === 'Present' || previousStatus === 'Late')) {
+          finalStatus = 'Absent'; // Se fue de la clase
+        }
+
         await AttendanceModel.update({
-          attendance_time: timeOnly,
+          attendance_time,
           status: finalStatus
         }, { 
           where: { id_attendance: existingAttendance.id_attendance } 
@@ -285,62 +327,59 @@ const handleMultipleAttendances = async (req: Request, res: Response) => {
           }]
         });
 
-        results.updated.push({
-          index: i,
-          attendance: updatedRecord,
-          action: "updated"
-        });
+        if (isFromJson) {
+          results.created.push({
+            student_id: id_student,
+            status: finalStatus
+          });
+        } else {
+          results.marked_absent.push({
+            student_id: id_student,
+            status: finalStatus
+          });
+        }
 
         // Log para debugging
-        console.log(`Attendance updated - Student: ${id_student}, Class: ${id_class}, Previous: ${previousStatus}, Final: ${finalStatus}, Time: ${timeOnly}`);
+        console.log(`Attendance updated - Student: ${id_student}, Previous: ${previousStatus}, Final: ${finalStatus}, FromJSON: ${isFromJson}`);
       } else {
         // Crear nuevo registro
         const newAttendance = await AttendanceModel.create({
           id_student,
           id_class,
-          attendance_date: new Date(dateOnly),
-          attendance_time: timeOnly,
-          status: 'Present'
+          attendance_date: new Date(attendance_date_final),
+          attendance_time,
+          status,
         });
 
-        const newRecord = await AttendanceModel.findByPk(newAttendance.id_attendance, {
-          include: [{
-            model: UsersModel,
-            attributes: ['id_user', 'name', 'email']
-          }]
-        });
+        if (isFromJson) {
+          results.created.push({
+            student_id: id_student,
+            status: status
+          });
+        } else {
+          results.marked_absent.push({
+            student_id: id_student,
+            status: status
+          });
+        }
 
-        results.created.push({
-          index: i,
-          attendance: newRecord,
-          action: "created"
-        });
+        console.log(`Attendance created - Student: ${id_student}, Status: ${status}, FromJSON: ${isFromJson}`);
       }
-
-      results.summary.successful++;
 
     } catch (attendanceError) {
       results.errors.push({
-        index: i,
-        id_student: attendance.id_student || 'unknown',
+        student_id: id_student,
         error: (attendanceError as Error).message
       });
-      results.summary.failed++;
     }
   }
 
-  console.log(`✅ Procesamiento completado: ${results.summary.successful} exitosos, ${results.summary.failed} fallidos`);
+  console.log(`✅ Procesamiento completado: ${results.created.length} creados/actualizados, ${results.marked_absent.length} ausentes, ${results.errors.length} errores`);
 
   res.status(200).json({
-    created: [...results.created, ...results.updated].map(item => ({
-      student_id: item.attendance.id_student,
-      status: item.attendance.status
-    })),
-    marked_absent: [], // En este flujo no marcamos ausentes automáticamente
-    errors: results.errors.map(error => ({
-      student_id: error.id_student,
-      error: error.error
-    }))
+    created: results.created,
+    marked_absent: results.marked_absent,
+    errors: results.errors
   });
 };
 
