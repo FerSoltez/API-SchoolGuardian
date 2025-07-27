@@ -264,11 +264,27 @@ const classesController = {
 
           const classJSON = classData.toJSON();
           
+          // Mapeo de días de inglés a español
+          const dayTranslation: { [key: string]: string } = {
+            'Monday': 'Lunes',
+            'Tuesday': 'Martes',
+            'Wednesday': 'Miércoles',
+            'Thursday': 'Jueves',
+            'Friday': 'Viernes',
+            'Saturday': 'Sábado',
+            'Sunday': 'Domingo'
+          };
+
+          // Función para formatear tiempo (solo horas y minutos)
+          const formatTime = (time: string): string => {
+            return time.substring(0, 5); // Toma solo HH:MM
+          };
+          
           // Formatear horarios para mostrar información más clara
           const formattedSchedules = (classJSON as any).Schedules?.map((schedule: any) => ({
             id_schedule: schedule.id_schedule,
-            day: schedule.weekday,
-            time: `${schedule.start_time} - ${schedule.end_time}`,
+            day: dayTranslation[schedule.weekday] || schedule.weekday,
+            time: `${formatTime(schedule.start_time)} - ${formatTime(schedule.end_time)}`,
             device_id: schedule.id_device, // Representa el salón
             start_time: schedule.start_time,
             end_time: schedule.end_time
