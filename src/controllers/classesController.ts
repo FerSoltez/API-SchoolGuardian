@@ -275,9 +275,13 @@ const classesController = {
             'Sunday': 'Domingo'
           };
 
-          // Función para formatear tiempo (solo horas y minutos)
+          // Función para formatear tiempo (solo horas y minutos con AM/PM)
           const formatTime = (time: string): string => {
-            return time.substring(0, 5); // Toma solo HH:MM
+            const [hours, minutes] = time.split(':');
+            const hour24 = parseInt(hours);
+            const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+            const period = hour24 >= 12 ? 'PM' : 'AM';
+            return `${hour12}:${minutes} ${period}`;
           };
           
           // Formatear horarios para mostrar información más clara
