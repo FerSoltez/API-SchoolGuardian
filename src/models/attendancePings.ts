@@ -22,10 +22,6 @@ class AttendancePingsModel extends Model<AttendancePingsAttributes, AttendancePi
   public ping_time!: Date;
   public status!: 'Present' | 'Late' | 'Absent';
   public ping_number!: number;
-
-  // Timestamps
-  public readonly createdAt!: Date;
-  public readonly updatedAt!: Date;
 }
 
 // Inicializar el modelo
@@ -64,13 +60,17 @@ AttendancePingsModel.init(
     ping_number: {
       type: DataTypes.TINYINT,
       allowNull: false,
+      validate: {
+        min: 1,
+        max: 3
+      }
     },
   },
   {
     sequelize,
     modelName: "AttendancePings",
     tableName: "Attendance_Pings",
-    timestamps: true,
+    timestamps: false, // Desactivar timestamps ya que la tabla no los tiene
   }
 );
 
