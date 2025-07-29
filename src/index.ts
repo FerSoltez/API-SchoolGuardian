@@ -7,6 +7,7 @@ import schedulesRoutes from './routes/schedulesRoutes';
 import enrollmentsRoutes from './routes/enrollmentsRoutes';
 import devicesRoutes from './routes/devicesRoutes';
 import attendanceRoutes from './routes/attendanceRoutes';
+import { attendancePingsCleanup } from './services/attendancePingsCleanup';
 
 import path from "path";
 
@@ -42,4 +43,24 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 const PORT = process.env.PORT || 3002;
 const server = app.listen(PORT, () => {
   console.log(`Servidor corriendo en el puerto ${PORT}`);
+  
+  // Iniciar el servicio de limpieza automática de pings
+  attendancePingsCleanup.startCleanupService();
+});
+
+// Manejar cierre graceful del servidor
+process.on('SIGTERM', () => {
+  console.log('🔄 Cerrando servidor...');
+  attendancePingsCleanup.stopCleanupService();
+  server.close(() => {
+    console.log('✅ Servidor cerrado correctamente');
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('🔄 Cerrando servidor...');
+  attendancePingsCleanup.stopCleanupService();
+  server.close(() => {
+    console.log('✅ Servidor cerrado correctamente');
+  });
 });

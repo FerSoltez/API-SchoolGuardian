@@ -1530,26 +1530,16 @@ const attendanceController = {
         });
       }
 
-      // Programar eliminación de pings después de 1 hora del fin de clase
-      // (Por ahora eliminar inmediatamente - puedes implementar un job scheduler después)
-      await AttendancePingsModel.destroy({
-        where: {
-          id_student,
-          id_class,
-          ping_time: {
-            [Op.between]: [
-              new Date(attendance_date + ' 00:00:00'),
-              new Date(attendance_date + ' 23:59:59')
-            ]
-          }
-        }
-      });
+      // NO eliminar los pings aquí - dejar que el servicio de limpieza los elimine
+      // 30 segundos después del tercer ping
+      // Los pings se mantendrán para visualización temporal
 
       return { 
         success: true, 
         final_status, 
         attendance_record: attendanceRecord,
-        pings_processed: pings.length
+        pings_processed: pings.length,
+        note: "Pings se eliminarán automáticamente 30 segundos después del tercer ping"
       };
 
     } catch (error) {
@@ -1615,6 +1605,45 @@ const attendanceController = {
         active_pings: Object.values(groupedPings)
       });
 
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  },
+
+  // Limpiar pings expirados manualmente
+  cleanupExpiredPings: async (req: Request, res: Response) => {
+    try {
+      const { attendancePingsCleanup } = await import('../services/attendancePingsCleanup');
+      const result = await attendancePingsCleanup.manualCleanup();
+      
+      res.status(200).json(result);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  },
+
+  // Obtener estadísticas de pings
+  getPingsStatistics: async (req: Request, res: Response) => {
+    try {
+      const { attendancePingsCleanup } = await import('../services/attendancePingsCleanup');
+      const stats = await attendancePingsCleanup.getPingsStats();
+      
+      res.status(200).json({
+        message: "Estadísticas de pings",
+        statistics: stats
+      });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  },
+
+  // Limpiar todos los pings (solo para testing)
+  cleanupAllPings: async (req: Request, res: Response) => {
+    try {
+      const { attendancePingsCleanup } = await import('../services/attendancePingsCleanup');
+      const result = await attendancePingsCleanup.cleanupAllPings();
+      
+      res.status(200).json(result);
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
     }

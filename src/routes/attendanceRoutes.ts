@@ -46,4 +46,9 @@ router.post("/attendance/date", authMiddleware, roleMiddleware(["Professor", "Ad
 // Obtener estadísticas de asistencia (Solo profesores y administradores, estudiantes ven solo las suyas)
 router.post("/attendance/stats", authMiddleware, attendanceController.getAttendanceStats as any);
 
+// Endpoints para manejo de pings
+router.delete("/attendance/pings/cleanup", authMiddleware, roleMiddleware(["Professor", "Administrator"]), attendanceController.cleanupExpiredPings as any);
+router.post("/attendance/pings/stats", authMiddleware, roleMiddleware(["Professor", "Administrator"]), attendanceController.getPingsStatistics as any);
+router.delete("/attendance/pings/all", authMiddleware, roleMiddleware(["Administrator"]), attendanceController.cleanupAllPings as any);
+
 export default router;

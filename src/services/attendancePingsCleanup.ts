@@ -1,0 +1,188 @@
+import * as cron from 'node-cron';
+import { Op } from 'sequelize';
+import AttendancePingsModel from '../models/attendancePings';
+
+class AttendancePingsCleanupService {
+  private cleanupJob: cron.ScheduledTask | null = null;
+
+  // Iniciar el servicio de limpieza automática
+  public startCleanupService(): void {
+    console.log('🧹 Iniciando servicio de limpieza de Attendance_Pings...');
+    
+    // Ejecutar cada 30 segundos
+    this.cleanupJob = cron.schedule('*/30 * * * * *', async () => {
+      await this.cleanupExpiredPings();
+    });
+
+    console.log('✅ Servicio de limpieza iniciado - se ejecuta cada 30 segundos');
+  }
+
+  // Detener el servicio de limpieza
+  public stopCleanupService(): void {
+    if (this.cleanupJob) {
+      this.cleanupJob.stop();
+      this.cleanupJob = null;
+      console.log('🛑 Servicio de limpieza detenido');
+    }
+  }
+
+  // Limpiar pings que tienen más de 30 segundos DESPUÉS del tercer ping
+  private async cleanupExpiredPings(): Promise<void> {
+    try {
+      const thirtySecondsAgo = new Date(Date.now() - 30 * 1000); // 30 segundos atrás
+
+      // Buscar grupos de estudiantes que tienen 3 pings y el último ping tiene más de 30 segundos
+      const studentsWithCompletePings = await AttendancePingsModel.findAll({
+        attributes: ['id_student', 'id_class'],
+        where: {
+          ping_number: 3, // Solo estudiantes que han completado los 3 pings
+          ping_time: {
+            [Op.lt]: thirtySecondsAgo // Y el tercer ping tiene más de 30 segundos
+          }
+        },
+        group: ['id_student', 'id_class']
+      });
+
+      let totalDeleted = 0;
+
+      // Para cada estudiante que completó sus 3 pings hace más de 30 segundos
+      for (const student of studentsWithCompletePings) {
+        const { id_student, id_class } = student;
+
+        // Eliminar TODOS los pings de ese estudiante para esa clase
+        const deletedCount = await AttendancePingsModel.destroy({
+          where: {
+            id_student,
+            id_class
+          }
+        });
+
+        totalDeleted += deletedCount;
+      }
+
+      if (totalDeleted > 0) {
+        console.log(`🗑️ Limpieza automática: ${totalDeleted} pings eliminados (30 seg después del 3er ping)`);
+      }
+    } catch (error) {
+      console.error('❌ Error en limpieza automática de pings:', (error as Error).message);
+    }
+  }
+
+  // Limpiar pings manualmente (para usar en endpoints)
+  public async manualCleanup(): Promise<{ deleted: number; message: string }> {
+    try {
+      const thirtySecondsAgo = new Date(Date.now() - 30 * 1000);
+
+      // Buscar grupos de estudiantes que tienen 3 pings y el último ping tiene más de 30 segundos
+      const studentsWithCompletePings = await AttendancePingsModel.findAll({
+        attributes: ['id_student', 'id_class'],
+        where: {
+          ping_number: 3, // Solo estudiantes que han completado los 3 pings
+          ping_time: {
+            [Op.lt]: thirtySecondsAgo // Y el tercer ping tiene más de 30 segundos
+          }
+        },
+        group: ['id_student', 'id_class']
+      });
+
+      let totalDeleted = 0;
+
+      // Para cada estudiante que completó sus 3 pings hace más de 30 segundos
+      for (const student of studentsWithCompletePings) {
+        const { id_student, id_class } = student;
+
+        // Eliminar TODOS los pings de ese estudiante para esa clase
+        const deletedCount = await AttendancePingsModel.destroy({
+          where: {
+            id_student,
+            id_class
+          }
+        });
+
+        totalDeleted += deletedCount;
+      }
+
+      return {
+        deleted: totalDeleted,
+        message: `Limpieza manual completada: ${totalDeleted} pings eliminados (30 seg después del 3er ping)`
+      };
+    } catch (error) {
+      throw new Error(`Error en limpieza manual: ${(error as Error).message}`);
+    }
+  }
+
+  // Limpiar todos los pings (para testing)
+  public async cleanupAllPings(): Promise<{ deleted: number; message: string }> {
+    try {
+      const deletedCount = await AttendancePingsModel.destroy({
+        where: {} // Sin condiciones = eliminar todos
+      });
+
+      return {
+        deleted: deletedCount,
+        message: `Todos los pings eliminados: ${deletedCount} registros`
+      };
+    } catch (error) {
+      throw new Error(`Error al eliminar todos los pings: ${(error as Error).message}`);
+    }
+  }
+
+  // Obtener estadísticas de pings
+  public async getPingsStats(): Promise<{
+    total: number;
+    students_with_complete_pings: number;
+    students_with_incomplete_pings: number;
+    ready_for_cleanup: number;
+  }> {
+    try {
+      const thirtySecondsAgo = new Date(Date.now() - 30 * 1000);
+
+      const total = await AttendancePingsModel.count();
+      
+      // Contar estudiantes que tienen exactamente 3 pings
+      const studentsWithCompletePings = await AttendancePingsModel.count({
+        distinct: true,
+        col: 'id_student',
+        where: {
+          ping_number: 3
+        }
+      });
+
+      // Contar estudiantes que tienen 1 o 2 pings (incompletos)
+      const studentsWithIncompletePings = await AttendancePingsModel.count({
+        distinct: true,
+        col: 'id_student',
+        where: {
+          ping_number: {
+            [Op.in]: [1, 2]
+          }
+        }
+      }) - studentsWithCompletePings; // Restar los que ya tienen 3 pings
+
+      // Contar estudiantes listos para limpieza (3er ping > 30 segundos)
+      const readyForCleanup = await AttendancePingsModel.count({
+        distinct: true,
+        col: 'id_student',
+        where: {
+          ping_number: 3,
+          ping_time: {
+            [Op.lt]: thirtySecondsAgo
+          }
+        }
+      });
+
+      return { 
+        total, 
+        students_with_complete_pings: studentsWithCompletePings,
+        students_with_incomplete_pings: Math.max(0, studentsWithIncompletePings),
+        ready_for_cleanup: readyForCleanup
+      };
+    } catch (error) {
+      throw new Error(`Error al obtener estadísticas: ${(error as Error).message}`);
+    }
+  }
+}
+
+// Exportar instancia singleton
+export const attendancePingsCleanup = new AttendancePingsCleanupService();
+export default AttendancePingsCleanupService;
