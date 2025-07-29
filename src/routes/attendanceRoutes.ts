@@ -13,6 +13,12 @@ router.post("/attendance", attendanceController.createAttendance as any);
 // Crear asistencias basándose en dispositivo (Solo profesores - Asistencia por dispositivo)
 router.post("/attendance/device", attendanceController.createAttendanceByDevice as any);
 
+// Manejar llegada de ping de asistencia (sin autenticación - para dispositivos)
+router.post("/attendance/ping", attendanceController.handleAttendancePing as any);
+
+// Obtener pings activos para una clase
+router.post("/attendance/pings/active", authMiddleware, roleMiddleware(["Professor", "Administrator"]), attendanceController.getActivePings as any);
+
 // Manejar status de asistencia desde dispositivo (sondeo automático) - PATCH porque actualiza/crea
 router.patch("/attendance/device-status", attendanceController.handleDeviceAttendanceStatus as any);
 

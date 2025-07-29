@@ -5,17 +5,20 @@ import DevicesModel from './devices';
 import EnrollmentsModel from './enrollments';
 import AttendanceModel from './attendance';
 import SchedulesModel from './schedules';
+import AttendancePingsModel from './attendancePings';
 
 // Users relationships
 UsersModel.hasMany(ClassesModel, { foreignKey: "id_professor" });
 UsersModel.hasMany(EnrollmentsModel, { foreignKey: "id_student" });
 UsersModel.hasMany(AttendanceModel, { foreignKey: "id_student" });
+UsersModel.hasMany(AttendancePingsModel, { foreignKey: "id_student" });
 
 // Classes relationships
 ClassesModel.belongsTo(UsersModel, { foreignKey: "id_professor" });
 ClassesModel.hasMany(EnrollmentsModel, { foreignKey: "id_class" });
 ClassesModel.hasMany(AttendanceModel, { foreignKey: "id_class" });
 ClassesModel.hasMany(SchedulesModel, { foreignKey: "id_class" });
+ClassesModel.hasMany(AttendancePingsModel, { foreignKey: "id_class" });
 
 // Devices relationships
 DevicesModel.hasMany(SchedulesModel, { foreignKey: "id_device" });
@@ -28,6 +31,10 @@ EnrollmentsModel.belongsTo(ClassesModel, { foreignKey: "id_class" });
 AttendanceModel.belongsTo(UsersModel, { foreignKey: "id_student" });
 AttendanceModel.belongsTo(ClassesModel, { foreignKey: "id_class" });
 
+// AttendancePings relationships
+AttendancePingsModel.belongsTo(UsersModel, { foreignKey: "id_student" });
+AttendancePingsModel.belongsTo(ClassesModel, { foreignKey: "id_class" });
+
 // Schedules relationships
 SchedulesModel.belongsTo(ClassesModel, { foreignKey: "id_class" });
 SchedulesModel.belongsTo(DevicesModel, { foreignKey: "id_device" });
@@ -38,5 +45,6 @@ export {
   DevicesModel,
   EnrollmentsModel,
   AttendanceModel,
-  SchedulesModel
+  SchedulesModel,
+  AttendancePingsModel
 };

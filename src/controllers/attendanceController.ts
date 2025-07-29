@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { InferAttributes, InferCreationAttributes } from "sequelize";
 import AttendanceModel from "../models/attendance";
+import AttendancePingsModel from "../models/attendancePings";
 import ClassesModel from "../models/classes";
 import UsersModel from "../models/users";
 import EnrollmentsModel from "../models/enrollments";
@@ -8,6 +9,9 @@ import SchedulesModel from "../models/schedules";
 import DevicesModel from "../models/devices";
 import jwt from "jsonwebtoken";
 import { Op } from "sequelize";
+
+// Import associations to establish relationships
+import "../models/associations";
 
 type AttendanceCreationAttributes = InferCreationAttributes<AttendanceModel>;
 
@@ -1201,6 +1205,362 @@ const attendanceController = {
           student_id: error.id_student,
           error: error.error
         }))
+      });
+
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  },
+
+  // Manejar llegada de un ping de asistencia
+  handleAttendancePing: async (req: Request, res: Response) => {
+    try {
+      const { id_device, attendances } = req.body;
+
+      // Validar que los campos requeridos estén presentes
+      if (!id_device || !attendances || !Array.isArray(attendances)) {
+        return res.status(400).json({ 
+          message: "Campos requeridos: id_device, attendances (array)" 
+        });
+      }
+
+      if (attendances.length === 0) {
+        return res.status(400).json({ 
+          message: "El array de asistencias no puede estar vacío" 
+        });
+      }
+
+      // Verificar que el dispositivo existe
+      const device = await DevicesModel.findByPk(id_device);
+      if (!device) {
+        return res.status(404).json({ 
+          message: `Dispositivo con ID ${id_device} no encontrado` 
+        });
+      }
+
+      // Usar el primer attendance_time para determinar la clase actual
+      const firstAttendance = attendances[0];
+      if (!firstAttendance.attendance_time) {
+        return res.status(400).json({
+          message: "Se requiere attendance_time para determinar la clase"
+        });
+      }
+
+      const classCheck = await getCurrentClassByDevice(id_device, firstAttendance.attendance_time);
+      
+      if (!classCheck.hasClass) {
+        return res.status(400).json({ 
+          message: classCheck.message 
+        });
+      }
+
+      const id_class = classCheck.schedule!.id_class;
+      const attendance_date = classCheck.extractedDate!;
+
+      // Obtener todos los estudiantes inscritos en la clase
+      const enrolledStudents = await EnrollmentsModel.findAll({
+        where: { id_class },
+        include: [
+          {
+            model: UsersModel,
+            where: { role: 'Student' },
+            attributes: ['id_user', 'name', 'email']
+          }
+        ]
+      });
+
+      if (enrolledStudents.length === 0) {
+        return res.status(404).json({ 
+          message: "No hay estudiantes inscritos en esta clase" 
+        });
+      }
+
+      // Crear un Set de estudiantes inscritos para validación rápida
+      const enrolledStudentIds = new Set(enrolledStudents.map(enrollment => enrollment.id_student));
+
+      // Crear un mapa de estudiantes enviados en el JSON
+      const attendanceMap = new Map();
+      attendances.forEach((attendance: any, index: number) => {
+        attendanceMap.set(attendance.id_student, { ...attendance, index });
+      });
+
+      const results = {
+        created: [] as any[],
+        marked_absent: [] as any[],
+        errors: [] as any[]
+      };
+
+      console.log(`📱 Procesando ${enrolledStudents.length} estudiantes inscritos para dispositivo ${id_device}, clase ${id_class}`);
+
+      // Procesar todos los estudiantes inscritos en la clase
+      for (const enrollment of enrolledStudents) {
+        const id_student = enrollment.id_student;
+        const student = (enrollment as any).User;
+        
+        let isFromJson = false;
+        let attendanceData = null;
+
+        try {
+          // Verificar si el estudiante está en el JSON enviado
+          if (attendanceMap.has(id_student)) {
+            attendanceData = attendanceMap.get(id_student);
+            isFromJson = true;
+            
+            // Buscar cuántos pings existen para este estudiante en esta clase y fecha
+            const existingPingsCount = await AttendancePingsModel.count({
+              where: {
+                id_student,
+                id_class,
+                ping_time: {
+                  [Op.between]: [
+                    new Date(attendance_date + ' 00:00:00'),
+                    new Date(attendance_date + ' 23:59:59')
+                  ]
+                }
+              }
+            });
+
+            // Si ya hay 3 pings, no insertar más pero marcar como creado
+            if (existingPingsCount >= 3) {
+              results.created.push({
+                student_id: id_student,
+                status: "Present"
+              });
+              continue;
+            }
+
+            // Extraer fecha y hora del attendance_time ISO
+            const dateTime = new Date(attendanceData.attendance_time);
+            const ping_number = existingPingsCount + 1;
+
+            // Insertar nuevo ping
+            await AttendancePingsModel.create({
+              id_student,
+              id_class,
+              ping_time: dateTime,
+              status: 'Present',
+              ping_number
+            });
+
+            results.created.push({
+              student_id: id_student,
+              status: "Present"
+            });
+
+            // Si este es el tercer ping, consolidar automáticamente
+            if (ping_number === 3) {
+              const consolidationResult = await attendanceController.consolidateAttendancePings(id_student, id_class, attendance_date);
+              if (!consolidationResult.success) {
+                console.error(`Error al consolidar asistencia para estudiante ${id_student}:`, consolidationResult.error);
+              }
+            }
+
+          } else {
+            // Estudiante no está en el JSON - marcar como ausente
+            results.marked_absent.push({
+              student_id: id_student,
+              status: "Absent"
+            });
+          }
+
+        } catch (pingError) {
+          results.errors.push({
+            student_id: id_student,
+            error: (pingError as Error).message
+          });
+        }
+      }
+
+      // Validar estudiantes en JSON que no están inscritos
+      for (let i = 0; i < attendances.length; i++) {
+        const attendance = attendances[i];
+        const id_student = attendance.id_student;
+        
+        if (!enrolledStudentIds.has(id_student)) {
+          const student = await UsersModel.findOne({
+            where: { id_user: id_student, role: 'Student' }
+          });
+          
+          results.errors.push({
+            student_id: id_student,
+            error: student ? 
+              `El estudiante ${student.name} no está inscrito en esta clase` : 
+              'Estudiante no encontrado en el sistema'
+          });
+        }
+      }
+
+      console.log(`✅ Procesamiento completado: ${results.created.length} creados, ${results.marked_absent.length} ausentes, ${results.errors.length} errores`);
+
+      res.status(200).json({
+        created: results.created,
+        marked_absent: results.marked_absent,
+        errors: results.errors
+      });
+
+    } catch (error) {
+      console.error('Error in handleAttendancePing:', error);
+      res.status(500).json({ 
+        message: "Error interno del servidor",
+        error: (error as Error).message 
+      });
+    }
+  },
+
+  // Consolidar los 3 pings en un registro definitivo en Attendance
+  consolidateAttendancePings: async (id_student: number, id_class: number, attendance_date: string) => {
+    try {
+      // Buscar los pings del estudiante en esa clase y fecha
+      const pings = await AttendancePingsModel.findAll({
+        where: {
+          id_student,
+          id_class,
+          ping_time: {
+            [Op.between]: [
+              new Date(attendance_date + ' 00:00:00'),
+              new Date(attendance_date + ' 23:59:59')
+            ]
+          }
+        },
+        order: [['ping_number', 'ASC']]
+      });
+
+      if (pings.length === 0) {
+        return { success: false, error: 'No se encontraron pings para consolidar' };
+      }
+
+      // Aplicar lógica de decisión para determinar el status final
+      let final_status: 'Present' | 'Late' | 'Absent' = 'Present';
+      
+      // Si solo hay 1 o 2 pings de 3 esperados, considerar como Late
+      if (pings.length < 3) {
+        final_status = 'Late';
+      }
+      
+      // Si tiene los 3 pings, considerar como Present
+      if (pings.length === 3) {
+        final_status = 'Present';
+      }
+
+      // Usar el tiempo del primer ping como attendance_time
+      const first_ping = pings[0];
+      const attendance_time = first_ping.ping_time.toTimeString().split(' ')[0]; // HH:MM:SS
+
+      // Verificar si ya existe un registro en Attendance para evitar duplicados
+      const existingAttendance = await AttendanceModel.findOne({
+        where: {
+          id_student,
+          id_class,
+          attendance_date: attendance_date
+        }
+      });
+
+      let attendanceRecord;
+
+      if (existingAttendance) {
+        // Actualizar registro existente
+        await AttendanceModel.update({
+          attendance_time,
+          status: final_status
+        }, { 
+          where: { id_attendance: existingAttendance.id_attendance } 
+        });
+
+        attendanceRecord = await AttendanceModel.findByPk(existingAttendance.id_attendance);
+      } else {
+        // Crear nuevo registro en Attendance
+        attendanceRecord = await AttendanceModel.create({
+          id_student,
+          id_class,
+          attendance_date: new Date(attendance_date),
+          attendance_time,
+          status: final_status
+        });
+      }
+
+      // Programar eliminación de pings después de 1 hora del fin de clase
+      // (Por ahora eliminar inmediatamente - puedes implementar un job scheduler después)
+      await AttendancePingsModel.destroy({
+        where: {
+          id_student,
+          id_class,
+          ping_time: {
+            [Op.between]: [
+              new Date(attendance_date + ' 00:00:00'),
+              new Date(attendance_date + ' 23:59:59')
+            ]
+          }
+        }
+      });
+
+      return { 
+        success: true, 
+        final_status, 
+        attendance_record: attendanceRecord,
+        pings_processed: pings.length
+      };
+
+    } catch (error) {
+      return { 
+        success: false, 
+        error: (error as Error).message 
+      };
+    }
+  },
+
+  // Obtener pings activos para una clase
+  getActivePings: async (req: Request, res: Response) => {
+    try {
+      const { id_class, date } = req.body;
+
+      if (!id_class) {
+        return res.status(400).json({ message: "ID de clase es requerido" });
+      }
+
+      const search_date = date || new Date().toISOString().split('T')[0];
+
+      const pings = await AttendancePingsModel.findAll({
+        where: {
+          id_class,
+          ping_time: {
+            [Op.between]: [
+              new Date(search_date + ' 00:00:00'),
+              new Date(search_date + ' 23:59:59')
+            ]
+          }
+        },
+        include: [
+          {
+            model: UsersModel,
+            attributes: ['id_user', 'name', 'email']
+          }
+        ],
+        order: [['ping_time', 'DESC']]
+      });
+
+      // Agrupar por estudiante
+      const groupedPings = pings.reduce((acc: any, ping: any) => {
+        const studentId = ping.id_student;
+        if (!acc[studentId]) {
+          acc[studentId] = {
+            student: ping.User,
+            pings: [],
+            ping_count: 0
+          };
+        }
+        acc[studentId].pings.push({
+          ping_number: ping.ping_number,
+          ping_time: ping.ping_time,
+          status: ping.status
+        });
+        acc[studentId].ping_count = acc[studentId].pings.length;
+        return acc;
+      }, {});
+
+      res.status(200).json({
+        class_id: id_class,
+        date: search_date,
+        active_pings: Object.values(groupedPings)
       });
 
     } catch (error) {
