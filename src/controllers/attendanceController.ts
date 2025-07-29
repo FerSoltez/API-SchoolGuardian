@@ -1356,11 +1356,57 @@ const attendanceController = {
             }
 
           } else {
-            // Estudiante no está en el JSON - marcar como ausente
+            // Estudiante no está en el JSON - crear ping como ausente
+            
+            // Buscar cuántos pings existen para este estudiante en esta clase y fecha
+            const existingPingsCount = await AttendancePingsModel.count({
+              where: {
+                id_student,
+                id_class,
+                ping_time: {
+                  [Op.between]: [
+                    new Date(attendance_date + ' 00:00:00'),
+                    new Date(attendance_date + ' 23:59:59')
+                  ]
+                }
+              }
+            });
+
+            // Si ya hay 3 pings, no insertar más pero marcar como ausente
+            if (existingPingsCount >= 3) {
+              results.marked_absent.push({
+                student_id: id_student,
+                status: "Absent"
+              });
+              continue;
+            }
+
+            // Usar la hora del primer estudiante detectado o hora actual para el ping de ausente
+            const firstAttendance = attendances[0];
+            const dateTime = firstAttendance ? new Date(firstAttendance.attendance_time) : new Date();
+            const ping_number = existingPingsCount + 1;
+
+            // Insertar nuevo ping como ausente
+            await AttendancePingsModel.create({
+              id_student,
+              id_class,
+              ping_time: dateTime,
+              status: 'Absent',
+              ping_number
+            });
+
             results.marked_absent.push({
               student_id: id_student,
               status: "Absent"
             });
+
+            // Si este es el tercer ping, consolidar automáticamente
+            if (ping_number === 3) {
+              const consolidationResult = await attendanceController.consolidateAttendancePings(id_student, id_class, attendance_date);
+              if (!consolidationResult.success) {
+                console.error(`Error al consolidar asistencia para estudiante ${id_student}:`, consolidationResult.error);
+              }
+            }
           }
 
         } catch (pingError) {
@@ -1430,16 +1476,22 @@ const attendanceController = {
       }
 
       // Aplicar lógica de decisión para determinar el status final
-      let final_status: 'Present' | 'Late' | 'Absent' = 'Present';
+      let final_status: 'Present' | 'Late' | 'Absent' = 'Absent';
       
-      // Si solo hay 1 o 2 pings de 3 esperados, considerar como Late
-      if (pings.length < 3) {
-        final_status = 'Late';
-      }
+      // Contar cuántos pings son de cada tipo
+      const presentPings = pings.filter(ping => ping.status === 'Present').length;
+      const absentPings = pings.filter(ping => ping.status === 'Absent').length;
       
-      // Si tiene los 3 pings, considerar como Present
-      if (pings.length === 3) {
+      // Lógica de decisión basada en los tipos de pings:
+      if (presentPings >= 2) {
+        // Si tiene 2 o más detecciones como "Present", es "Present"
         final_status = 'Present';
+      } else if (presentPings >= 1) {
+        // Si tiene 1 detección como "Present", es "Late"
+        final_status = 'Late';
+      } else {
+        // Si no tiene ninguna detección como "Present", es "Absent"
+        final_status = 'Absent';
       }
 
       // Usar el tiempo del primer ping como attendance_time
