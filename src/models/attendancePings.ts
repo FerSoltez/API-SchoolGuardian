@@ -1,5 +1,5 @@
 import { DataTypes, Model, Optional } from "sequelize";
-import sequelize from "../config/database";
+import { sequelize } from "../config/database";
 
 // Definir la interfaz para los atributos del modelo
 interface AttendancePingsAttributes {
