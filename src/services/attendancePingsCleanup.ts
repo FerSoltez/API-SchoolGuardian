@@ -1,6 +1,7 @@
 import * as cron from 'node-cron';
 import { Op } from 'sequelize';
 import AttendancePingsModel from '../models/attendancePings';
+import {broadcast} from '../index';
 
 class AttendancePingsCleanupService {
   private cleanupJob: cron.ScheduledTask | null = null;
@@ -61,7 +62,12 @@ class AttendancePingsCleanupService {
       }
 
       if (totalDeleted > 0) {
+
+        broadcast({
+          message: `Limpieza automática: ${totalDeleted} pings eliminados (30 seg después del 3er ping)`,
+        });
         console.log(`🗑️ Limpieza automática: ${totalDeleted} pings eliminados (30 seg después del 3er ping)`);
+
       }
     } catch (error) {
       console.error('❌ Error en limpieza automática de pings:', (error as Error).message);
