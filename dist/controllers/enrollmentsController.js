@@ -52,10 +52,6 @@ const enrollmentsController = {
                 id_class: classData.id_class,
                 id_student,
             });
-            // Notificar cambio de inscripciones via WebSocket
-            if (global.webSocketService) {
-                global.webSocketService.notifyEnrollmentChange(classData.id_class);
-            }
             res.status(201).json({
                 message: "Inscripción realizada exitosamente.",
                 enrollment: newEnrollment,
@@ -140,10 +136,6 @@ const enrollmentsController = {
                 where: { id_student: userId, id_class: id },
             });
             if (deleted) {
-                // Notificar cambio de inscripciones via WebSocket
-                if (global.webSocketService) {
-                    global.webSocketService.notifyEnrollmentChange(parseInt(id));
-                }
                 res.status(200).json({ message: "Inscripción eliminada exitosamente" });
             }
             else {
@@ -292,10 +284,6 @@ const enrollmentsController = {
                 id_class: classData.id_class,
                 id_student: userId,
             });
-            // Notificar cambio de inscripciones via WebSocket
-            if (global.webSocketService) {
-                global.webSocketService.notifyEnrollmentChange(classData.id_class);
-            }
             res.status(201).json({
                 message: "Te has inscrito exitosamente en la clase.",
                 enrollment: newEnrollment,

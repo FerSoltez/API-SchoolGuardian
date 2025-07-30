@@ -1177,8 +1177,6 @@ const attendanceController = {
                 marked_absent: [],
                 errors: []
             };
-            // Array para recopilar todas las notificaciones WebSocket del lote
-            const batchPingNotifications = [];
             console.log(`📱 Procesando ${enrolledStudents.length} estudiantes inscritos para dispositivo ${id_device}, clase ${id_class}`);
             // Procesar todos los estudiantes inscritos en la clase
             for (const enrollment of enrolledStudents) {
@@ -1227,15 +1225,6 @@ const attendanceController = {
                             student_id: id_student,
                             status: "Present"
                         });
-                        // Agregar a las notificaciones del lote en lugar de enviar individualmente
-                        batchPingNotifications.push({
-                            id_ping: newPing.id_ping,
-                            id_student,
-                            ping_number,
-                            status: 'Present',
-                            ping_time: dateTime,
-                            student_name: student.name
-                        });
                         // Si este es el tercer ping, consolidar automáticamente
                         if (ping_number === 3) {
                             const consolidationResult = yield attendanceController.consolidateAttendancePings(id_student, id_class, attendance_date);
@@ -1283,26 +1272,11 @@ const attendanceController = {
                             student_id: id_student,
                             status: "Absent"
                         });
-                        // Agregar a las notificaciones del lote en lugar de enviar individualmente
-                        batchPingNotifications.push({
-                            id_ping: newAbsentPing.id_ping,
-                            id_student,
-                            ping_number,
-                            status: 'Absent',
-                            ping_time: dateTime,
-                            student_name: student.name
-                        });
                         // Si este es el tercer ping, consolidar automáticamente
                         if (ping_number === 3) {
                             const consolidationResult = yield attendanceController.consolidateAttendancePings(id_student, id_class, attendance_date);
                             if (!consolidationResult.success) {
                                 console.error(`Error al consolidar asistencia para estudiante ${id_student}:`, consolidationResult.error);
-                            }
-                            else {
-                                // Notificar consolidación via WebSocket
-                                if (global.webSocketService && consolidationResult.final_status) {
-                                    global.webSocketService.notifyAttendanceConsolidated(id_class, id_student, consolidationResult.final_status);
-                                }
                             }
                         }
                     }
@@ -1331,10 +1305,6 @@ const attendanceController = {
                 }
             }
             console.log(`✅ Procesamiento completado: ${results.created.length} creados, ${results.marked_absent.length} ausentes, ${results.errors.length} errores`);
-            // 📡 Emitir TODAS las notificaciones del lote de una sola vez
-            if (global.webSocketService && batchPingNotifications.length > 0) {
-                global.webSocketService.notifyBatchPings(id_class, batchPingNotifications);
-            }
             res.status(200).json({
                 created: results.created,
                 marked_absent: results.marked_absent,
