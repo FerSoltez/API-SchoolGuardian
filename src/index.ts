@@ -1,4 +1,5 @@
 import express, { Application, Request, Response, NextFunction } from "express";
+import { createServer } from "http";
 import dotenv from "dotenv";
 import cors from "cors";
 import usersRoutes from './routes/usersRoutes';
@@ -8,11 +9,22 @@ import enrollmentsRoutes from './routes/enrollmentsRoutes';
 import devicesRoutes from './routes/devicesRoutes';
 import attendanceRoutes from './routes/attendanceRoutes';
 import { attendancePingsCleanup } from './services/attendancePingsCleanup';
+import WebSocketService from './services/webSocketService';
 
 import path from "path";
 
 dotenv.config();
 const app: Application = express();
+const httpServer = createServer(app);
+
+// Inicializar WebSocket Service
+const webSocketService = new WebSocketService(httpServer);
+
+// Hacer el servicio WebSocket accesible globalmente
+declare global {
+  var webSocketService: WebSocketService;
+}
+global.webSocketService = webSocketService;
 
 // Middlewares  
 app.use(cors());
@@ -41,8 +53,9 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 
 // Puerto del servidor
 const PORT = process.env.PORT || 3002;
-const server = app.listen(PORT, () => {
-  console.log(`Servidor corriendo en el puerto ${PORT}`);
+const server = httpServer.listen(PORT, () => {
+  console.log(`🚀 Servidor HTTP corriendo en el puerto ${PORT}`);
+  console.log(`🔌 WebSocket Server iniciado en puerto ${PORT}`);
   
   // Iniciar el servicio de limpieza automática de pings
   attendancePingsCleanup.startCleanupService();
