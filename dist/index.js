@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.broadcast = void 0;
 const express_1 = __importDefault(require("express"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const cors_1 = __importDefault(require("cors"));
@@ -14,6 +15,7 @@ const devicesRoutes_1 = __importDefault(require("./routes/devicesRoutes"));
 const attendanceRoutes_1 = __importDefault(require("./routes/attendanceRoutes"));
 const attendancePingsCleanup_1 = require("./services/attendancePingsCleanup");
 const path_1 = __importDefault(require("path"));
+const ws_1 = require("ws");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 // Middlewares  
@@ -73,3 +75,19 @@ process.on('SIGINT', () => {
         console.log('✅ Servidor cerrado correctamente');
     });
 });
+// Configurar WebSocketServer
+const wss = new ws_1.WebSocketServer({ server });
+wss.on('connection', (ws) => {
+    console.log('Cliente conectado');
+    ws.on('close', () => {
+        console.log('Cliente desconectado');
+    });
+});
+const broadcast = (data) => {
+    wss.clients.forEach(client => {
+        if (client.readyState === client.OPEN) {
+            client.send(JSON.stringify(data));
+        }
+    });
+};
+exports.broadcast = broadcast;

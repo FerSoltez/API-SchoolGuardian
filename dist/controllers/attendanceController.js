@@ -53,6 +53,7 @@ const enrollments_1 = __importDefault(require("../models/enrollments"));
 const schedules_1 = __importDefault(require("../models/schedules"));
 const devices_1 = __importDefault(require("../models/devices"));
 const sequelize_1 = require("sequelize");
+const index_1 = require("../index"); // Importar la función broadcast
 // Import associations to establish relationships
 require("../models/associations");
 // Función helper para verificar si hay clase en ese día y hora
@@ -1451,6 +1452,11 @@ const attendanceController = {
                 acc[studentId].ping_count = acc[studentId].pings.length;
                 return acc;
             }, {});
+            (0, index_1.broadcast)({
+                class_id: id_class,
+                date: search_date,
+                active_pings: Object.values(groupedPings)
+            });
             res.status(200).json({
                 class_id: id_class,
                 date: search_date,
