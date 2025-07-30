@@ -56,17 +56,41 @@ class WebSocketService {
           return next(new Error('Token de autenticación requerido'));
         }
 
-        // Verificar el token JWT
         console.log('🔐 WebSocket Auth - Verificando token JWT...');
-        const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as any;
+        console.log('🔑 WebSocket Auth - JWT_SECRET disponible:', !!process.env.JWT_SECRET);
+        console.log('🔑 WebSocket Auth - JWT_SECRET primeros 10 chars:', process.env.JWT_SECRET?.substring(0, 10));
         
-        console.log('✅ WebSocket Auth - Token decodificado:', {
-          id: decoded.id,
-          role: decoded.role,
-          iat: decoded.iat,
-          exp: decoded.exp,
-          current_time: Math.floor(Date.now() / 1000)
-        });
+        let decoded: any;
+        try {
+          decoded = jwt.verify(token, process.env.JWT_SECRET as string) as any;
+          
+          console.log('✅ WebSocket Auth - Token decodificado:', {
+            id: decoded.id,
+            role: decoded.role,
+            iat: decoded.iat,
+            exp: decoded.exp,
+            current_time: Math.floor(Date.now() / 1000)
+          });
+          
+        } catch (jwtError) {
+          console.error('❌ WebSocket Auth - JWT Error:', jwtError);
+          
+          if (jwtError instanceof jwt.TokenExpiredError) {
+            console.log('⏰ WebSocket Auth - Token expirado');
+            return next(new Error('Token expirado'));
+          } else if (jwtError instanceof jwt.JsonWebTokenError) {
+            if (jwtError.message === 'invalid signature') {
+              console.log('🔐 WebSocket Auth - Firma inválida - JWT_SECRET incorrecto');
+              return next(new Error('Token con firma inválida - JWT_SECRET incorrecto'));
+            } else {
+              console.log('🔐 WebSocket Auth - Token malformado:', jwtError.message);
+              return next(new Error('Token malformado'));
+            }
+          } else {
+            console.log('❌ WebSocket Auth - Error desconocido:', jwtError);
+            return next(new Error('Error de autenticación'));
+          }
+        }
         
         // Obtener información del usuario
         const user = await UsersModel.findByPk(decoded.id);
