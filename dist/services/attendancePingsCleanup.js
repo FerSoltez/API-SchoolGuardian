@@ -49,6 +49,7 @@ exports.attendancePingsCleanup = void 0;
 const cron = __importStar(require("node-cron"));
 const sequelize_1 = require("sequelize");
 const attendancePings_1 = __importDefault(require("../models/attendancePings"));
+const index_1 = require("../index");
 class AttendancePingsCleanupService {
     constructor() {
         this.cleanupJob = null;
@@ -100,6 +101,9 @@ class AttendancePingsCleanupService {
                     totalDeleted += deletedCount;
                 }
                 if (totalDeleted > 0) {
+                    (0, index_1.broadcast)({
+                        message: `Limpieza automática: ${totalDeleted} pings eliminados (30 seg después del 3er ping)`,
+                    });
                     console.log(`🗑️ Limpieza automática: ${totalDeleted} pings eliminados (30 seg después del 3er ping)`);
                 }
             }

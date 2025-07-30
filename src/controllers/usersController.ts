@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import Users from "../models/users";
 import bcrypt from "bcryptjs";
 import jwt from 'jsonwebtoken';
+import { Op } from 'sequelize';
 import Attendance from "../models/attendance";
 import Classes from "../models/classes";
 import Enrollments from "../models/enrollments";
@@ -26,11 +27,28 @@ const cuentasBloqueadas: { [email: string]: number } = {};
 const usersController = {
   createUser: async (req: Request, res: Response) => {
     try {
-      const { name, email, password, role, user_uuid } = req.body;
+      const { name, matricula, email, password, role, user_uuid } = req.body;
 
       // Validar campos obligatorios
       if (!name || !email || !password || !role) {
         return res.status(400).json({ message: "Nombre, email, contraseña y rol son requeridos." });
+      }
+
+      // Validar matrícula según el rol
+      if (role === 'Student' || role === 'Professor') {
+        if (!matricula) {
+          return res.status(400).json({ 
+            message: `La matrícula es obligatoria para ${role === 'Student' ? 'estudiantes' : 'profesores'}.` 
+          });
+        }
+        
+        // Verificar que la matrícula no esté ya en uso
+        const existingUserWithMatricula = await Users.findOne({ where: { matricula } });
+        if (existingUserWithMatricula) {
+          return res.status(400).json({ message: "La matrícula ya está en uso." });
+        }
+      } else if (role === 'Administrator' && matricula) {
+        return res.status(400).json({ message: "Los administradores no pueden tener matrícula." });
       }
 
       // Validar que el user_uuid sea obligatorio solo para estudiantes
@@ -64,6 +82,11 @@ const usersController = {
         attempts: 3, // Inicia con 3 intentos disponibles
         verification: role !== 'Student' // Solo los estudiantes necesitan verificación
       };
+
+      // Agregar matrícula para estudiantes y profesores
+      if (role === 'Student' || role === 'Professor') {
+        userData.matricula = matricula;
+      }
 
       // Solo agregar user_uuid para estudiantes
       if (role === 'Student') {
@@ -459,6 +482,34 @@ const usersController = {
       const user = await Users.findByPk(id);
       if (!user) {
         return res.status(404).json({ message: "Usuario no encontrado" });
+      }
+
+      // Validaciones específicas para matrícula
+      if (req.body.matricula !== undefined) {
+        // Si el usuario es administrador, no puede tener matrícula
+        if (user.role === 'Administrator' && req.body.matricula !== null) {
+          return res.status(400).json({ message: "Los administradores no pueden tener matrícula." });
+        }
+        
+        // Si el usuario es estudiante o profesor, debe tener matrícula
+        if ((user.role === 'Student' || user.role === 'Professor') && !req.body.matricula) {
+          return res.status(400).json({ 
+            message: `La matrícula es obligatoria para ${user.role === 'Student' ? 'estudiantes' : 'profesores'}.` 
+          });
+        }
+        
+        // Verificar que la matrícula no esté ya en uso por otro usuario
+        if (req.body.matricula) {
+          const existingUserWithMatricula = await Users.findOne({ 
+            where: { 
+              matricula: req.body.matricula,
+              id_user: { [Op.ne]: id } // Excluir el usuario actual
+            } 
+          });
+          if (existingUserWithMatricula) {
+            return res.status(400).json({ message: "La matrícula ya está en uso por otro usuario." });
+          }
+        }
       }
 
       // Si se está actualizando la contraseña, hashearla

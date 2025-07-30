@@ -4,6 +4,7 @@ import { sequelize } from '../config/database';
 interface UsersAttributes {
   id_user: number;
   name: string;
+  matricula?: string; // Nuevo campo - solo para Student y Professor
   email: string;
   password: string;
   role: 'Administrator' | 'Professor' | 'Student';
@@ -14,6 +15,7 @@ interface UsersAttributes {
 
 interface UsersCreationAttributes {
   name: string;
+  matricula?: string; // Nuevo campo - solo para Student y Professor
   email: string;
   password: string;
   role: 'Administrator' | 'Professor' | 'Student';
@@ -25,6 +27,7 @@ interface UsersCreationAttributes {
 class UsersModel extends Model<UsersAttributes, UsersCreationAttributes> implements UsersAttributes {
   public id_user!: number;
   public name!: string;
+  public matricula?: string; // Nuevo campo - solo para Student y Professor
   public email!: string;
   public password!: string;
   public role!: 'Administrator' | 'Professor' | 'Student';
@@ -43,6 +46,22 @@ UsersModel.init(
     name: {
       type: DataTypes.STRING(100),
       allowNull: false,
+    },
+    matricula: {
+      type: DataTypes.STRING(50),
+      allowNull: true, // Puede ser null para Administrators
+      unique: true, // Único en toda la tabla
+      validate: {
+        // Validación personalizada: solo Student y Professor pueden tener matrícula
+        isValidForRole(value: string | null) {
+          if (value !== null && this.role === 'Administrator') {
+            throw new Error('Los administradores no pueden tener matrícula');
+          }
+          if (value === null && (this.role === 'Student' || this.role === 'Professor')) {
+            throw new Error('Los estudiantes y profesores deben tener matrícula');
+          }
+        }
+      }
     },
     email: {
       type: DataTypes.STRING(100),

@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const users_1 = __importDefault(require("../models/users"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const sequelize_1 = require("sequelize");
 const attendance_1 = __importDefault(require("../models/attendance"));
 const classes_1 = __importDefault(require("../models/classes"));
 const enrollments_1 = __importDefault(require("../models/enrollments"));
@@ -26,10 +27,26 @@ const cuentasBloqueadas = {};
 const usersController = {
     createUser: (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         try {
-            const { name, email, password, role, user_uuid } = req.body;
+            const { name, matricula, email, password, role, user_uuid } = req.body;
             // Validar campos obligatorios
             if (!name || !email || !password || !role) {
                 return res.status(400).json({ message: "Nombre, email, contraseña y rol son requeridos." });
+            }
+            // Validar matrícula según el rol
+            if (role === 'Student' || role === 'Professor') {
+                if (!matricula) {
+                    return res.status(400).json({
+                        message: `La matrícula es obligatoria para ${role === 'Student' ? 'estudiantes' : 'profesores'}.`
+                    });
+                }
+                // Verificar que la matrícula no esté ya en uso
+                const existingUserWithMatricula = yield users_1.default.findOne({ where: { matricula } });
+                if (existingUserWithMatricula) {
+                    return res.status(400).json({ message: "La matrícula ya está en uso." });
+                }
+            }
+            else if (role === 'Administrator' && matricula) {
+                return res.status(400).json({ message: "Los administradores no pueden tener matrícula." });
             }
             // Validar que el user_uuid sea obligatorio solo para estudiantes
             if (role === 'Student') {
@@ -58,6 +75,10 @@ const usersController = {
                 attempts: 3, // Inicia con 3 intentos disponibles
                 verification: role !== 'Student' // Solo los estudiantes necesitan verificación
             };
+            // Agregar matrícula para estudiantes y profesores
+            if (role === 'Student' || role === 'Professor') {
+                userData.matricula = matricula;
+            }
             // Solo agregar user_uuid para estudiantes
             if (role === 'Student') {
                 userData.user_uuid = user_uuid;
@@ -386,6 +407,31 @@ const usersController = {
             const user = yield users_1.default.findByPk(id);
             if (!user) {
                 return res.status(404).json({ message: "Usuario no encontrado" });
+            }
+            // Validaciones específicas para matrícula
+            if (req.body.matricula !== undefined) {
+                // Si el usuario es administrador, no puede tener matrícula
+                if (user.role === 'Administrator' && req.body.matricula !== null) {
+                    return res.status(400).json({ message: "Los administradores no pueden tener matrícula." });
+                }
+                // Si el usuario es estudiante o profesor, debe tener matrícula
+                if ((user.role === 'Student' || user.role === 'Professor') && !req.body.matricula) {
+                    return res.status(400).json({
+                        message: `La matrícula es obligatoria para ${user.role === 'Student' ? 'estudiantes' : 'profesores'}.`
+                    });
+                }
+                // Verificar que la matrícula no esté ya en uso por otro usuario
+                if (req.body.matricula) {
+                    const existingUserWithMatricula = yield users_1.default.findOne({
+                        where: {
+                            matricula: req.body.matricula,
+                            id_user: { [sequelize_1.Op.ne]: id } // Excluir el usuario actual
+                        }
+                    });
+                    if (existingUserWithMatricula) {
+                        return res.status(400).json({ message: "La matrícula ya está en uso por otro usuario." });
+                    }
+                }
             }
             // Si se está actualizando la contraseña, hashearla
             if (req.body.password) {

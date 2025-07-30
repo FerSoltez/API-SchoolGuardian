@@ -14,6 +14,22 @@ UsersModel.init({
         type: sequelize_1.DataTypes.STRING(100),
         allowNull: false,
     },
+    matricula: {
+        type: sequelize_1.DataTypes.STRING(50),
+        allowNull: true, // Puede ser null para Administrators
+        unique: true, // Único en toda la tabla
+        validate: {
+            // Validación personalizada: solo Student y Professor pueden tener matrícula
+            isValidForRole(value) {
+                if (value !== null && this.role === 'Administrator') {
+                    throw new Error('Los administradores no pueden tener matrícula');
+                }
+                if (value === null && (this.role === 'Student' || this.role === 'Professor')) {
+                    throw new Error('Los estudiantes y profesores deben tener matrícula');
+                }
+            }
+        }
+    },
     email: {
         type: sequelize_1.DataTypes.STRING(100),
         allowNull: false,

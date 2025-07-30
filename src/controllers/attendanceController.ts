@@ -1627,7 +1627,7 @@ const attendanceController = {
         include: [
           {
             model: UsersModel,
-            attributes: ['id_user', 'name', 'email']
+            attributes: ['id_user', 'name', 'matricula']
           }
         ],
         order: [['ping_time', 'DESC']]

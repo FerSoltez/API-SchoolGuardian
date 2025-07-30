@@ -1305,7 +1305,55 @@ const attendanceController = {
                     });
                 }
             }
+            // Al final de handleAttendancePing, justo antes del broadcast
             console.log(`✅ Procesamiento completado: ${results.created.length} creados, ${results.marked_absent.length} ausentes, ${results.errors.length} errores`);
+            const activePings = yield attendancePings_1.default.findAll({
+                where: {
+                    id_class,
+                    ping_time: {
+                        [sequelize_1.Op.between]: [
+                            new Date(attendance_date + ' 00:00:00'),
+                            new Date(attendance_date + ' 23:59:59')
+                        ]
+                    }
+                },
+                include: [
+                    {
+                        model: users_1.default,
+                        attributes: ['id_user', 'name', 'email']
+                    }
+                ],
+                order: [['ping_time', 'DESC']]
+            });
+            const groupedPings = activePings.reduce((acc, ping) => {
+                const studentId = ping.id_student;
+                if (!acc[studentId]) {
+                    acc[studentId] = {
+                        student: ping.User,
+                        pings: [],
+                        ping_count: 0
+                    };
+                }
+                acc[studentId].pings.push({
+                    ping_number: ping.ping_number,
+                    ping_time: ping.ping_time,
+                    status: ping.status
+                });
+                acc[studentId].ping_count = acc[studentId].pings.length;
+                return acc;
+            }, {});
+            (0, index_1.broadcast)({
+                type: 'active_pings_update',
+                class_id: id_class,
+                date: attendance_date,
+                active_pings: Object.values(groupedPings),
+                timestamp: new Date(),
+                processing_results: {
+                    created: results.created.length,
+                    marked_absent: results.marked_absent.length,
+                    errors: results.errors.length
+                }
+            });
             res.status(200).json({
                 created: results.created,
                 marked_absent: results.marked_absent,
@@ -1429,7 +1477,7 @@ const attendanceController = {
                 include: [
                     {
                         model: users_1.default,
-                        attributes: ['id_user', 'name', 'email']
+                        attributes: ['id_user', 'name', 'matricula']
                     }
                 ],
                 order: [['ping_time', 'DESC']]
@@ -1452,11 +1500,6 @@ const attendanceController = {
                 acc[studentId].ping_count = acc[studentId].pings.length;
                 return acc;
             }, {});
-            (0, index_1.broadcast)({
-                class_id: id_class,
-                date: search_date,
-                active_pings: Object.values(groupedPings)
-            });
             res.status(200).json({
                 class_id: id_class,
                 date: search_date,
