@@ -22,9 +22,21 @@ class WebSocketService {
   constructor(server: HTTPServer) {
     this.io = new SocketIOServer(server, {
       cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-      }
+        origin: [
+          "http://localhost:3000",
+          "http://localhost:3001", 
+          "https://your-frontend-domain.com", // Reemplazar con tu dominio frontend
+          "https://api-schoolguardian.onrender.com"
+        ],
+        methods: ["GET", "POST"],
+        credentials: true
+      },
+      allowEIO3: true,
+      transports: ['websocket', 'polling'],
+      pingTimeout: 60000,
+      pingInterval: 25000,
+      upgradeTimeout: 30000,
+      maxHttpBufferSize: 1e6
     });
 
     this.setupMiddleware();
@@ -75,11 +87,41 @@ class WebSocketService {
         socketId: socket.id
       });
 
+      // Enviar confirmación de conexión
+      socket.emit('connection-confirmed', {
+        message: `Conectado como ${socket.userName}`,
+        role: socket.userRole,
+        timestamp: new Date(),
+        server_info: {
+          env: process.env.NODE_ENV || 'development',
+          version: '1.0.0'
+        }
+      });
+
       // Eventos del cliente
       this.handleJoinClassRoom(socket);
       this.handleLeaveClassRoom(socket);
       this.handleGetConnectedUsers(socket);
       this.handleDisconnection(socket);
+
+      // Manejar errores de socket
+      socket.on('error', (error) => {
+        console.error(`❌ Error en socket de ${socket.userName}:`, error);
+        socket.emit('error', { 
+          message: 'Error en la conexión WebSocket',
+          timestamp: new Date()
+        });
+      });
+    });
+
+    // Manejar errores del servidor WebSocket
+    this.io.on('error', (error) => {
+      console.error('❌ Error en WebSocket Server:', error);
+    });
+
+    // Log de estado del servidor
+    this.io.on('connection_error', (error) => {
+      console.error('❌ Error de conexión WebSocket:', error);
     });
   }
 
