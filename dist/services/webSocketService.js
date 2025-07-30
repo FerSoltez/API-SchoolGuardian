@@ -49,16 +49,32 @@ class WebSocketService {
             var _a;
             try {
                 const token = socket.handshake.auth.token || ((_a = socket.handshake.headers.authorization) === null || _a === void 0 ? void 0 : _a.replace('Bearer ', ''));
+                console.log('🔍 WebSocket Auth - Token recibido:', token ? `${token.substring(0, 20)}...` : 'No token');
                 if (!token) {
+                    console.log('❌ WebSocket Auth - No se proporcionó token');
                     return next(new Error('Token de autenticación requerido'));
                 }
                 // Verificar el token JWT
+                console.log('🔐 WebSocket Auth - Verificando token JWT...');
                 const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET);
+                console.log('✅ WebSocket Auth - Token decodificado:', {
+                    id: decoded.id,
+                    role: decoded.role,
+                    iat: decoded.iat,
+                    exp: decoded.exp,
+                    current_time: Math.floor(Date.now() / 1000)
+                });
                 // Obtener información del usuario
                 const user = yield users_1.default.findByPk(decoded.id);
                 if (!user) {
+                    console.log('❌ WebSocket Auth - Usuario no encontrado en BD:', decoded.id);
                     return next(new Error('Usuario no encontrado'));
                 }
+                console.log('✅ WebSocket Auth - Usuario encontrado:', {
+                    id: user.id_user,
+                    name: user.name,
+                    role: user.role
+                });
                 // Agregar información del usuario al socket
                 socket.userId = user.id_user;
                 socket.userRole = user.role;
@@ -66,7 +82,16 @@ class WebSocketService {
                 next();
             }
             catch (error) {
-                next(new Error('Token inválido'));
+                console.error('❌ WebSocket Auth - Error:', error);
+                if (error instanceof jsonwebtoken_1.default.TokenExpiredError) {
+                    return next(new Error('Token expirado'));
+                }
+                else if (error instanceof jsonwebtoken_1.default.JsonWebTokenError) {
+                    return next(new Error('Token inválido'));
+                }
+                else {
+                    return next(new Error('Error de autenticación'));
+                }
             }
         }));
     }

@@ -49,18 +49,37 @@ class WebSocketService {
       try {
         const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.replace('Bearer ', '');
         
+        console.log('🔍 WebSocket Auth - Token recibido:', token ? `${token.substring(0, 20)}...` : 'No token');
+        
         if (!token) {
+          console.log('❌ WebSocket Auth - No se proporcionó token');
           return next(new Error('Token de autenticación requerido'));
         }
 
         // Verificar el token JWT
+        console.log('🔐 WebSocket Auth - Verificando token JWT...');
         const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as any;
+        
+        console.log('✅ WebSocket Auth - Token decodificado:', {
+          id: decoded.id,
+          role: decoded.role,
+          iat: decoded.iat,
+          exp: decoded.exp,
+          current_time: Math.floor(Date.now() / 1000)
+        });
         
         // Obtener información del usuario
         const user = await UsersModel.findByPk(decoded.id);
         if (!user) {
+          console.log('❌ WebSocket Auth - Usuario no encontrado en BD:', decoded.id);
           return next(new Error('Usuario no encontrado'));
         }
+
+        console.log('✅ WebSocket Auth - Usuario encontrado:', {
+          id: user.id_user,
+          name: user.name,
+          role: user.role
+        });
 
         // Agregar información del usuario al socket
         socket.userId = user.id_user;
@@ -69,7 +88,15 @@ class WebSocketService {
 
         next();
       } catch (error) {
-        next(new Error('Token inválido'));
+        console.error('❌ WebSocket Auth - Error:', error);
+        
+        if (error instanceof jwt.TokenExpiredError) {
+          return next(new Error('Token expirado'));
+        } else if (error instanceof jwt.JsonWebTokenError) {
+          return next(new Error('Token inválido'));
+        } else {
+          return next(new Error('Error de autenticación'));
+        }
       }
     });
   }
