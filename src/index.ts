@@ -10,6 +10,7 @@ import attendanceRoutes from './routes/attendanceRoutes';
 import { attendancePingsCleanup } from './services/attendancePingsCleanup';
 
 import path from "path";
+import { WebSocketServer } from "ws";
 
 dotenv.config();
 const app: Application = express();
@@ -81,3 +82,21 @@ process.on('SIGINT', () => {
     console.log('✅ Servidor cerrado correctamente');
   });
 });
+
+// Configurar WebSocketServer
+const wss = new WebSocketServer({ server });
+
+wss.on('connection', (ws) => {
+  console.log('Cliente conectado');
+  ws.on('close', () => {
+    console.log('Cliente desconectado');
+  });
+});
+
+export const broadcast = (data: any) => {
+  wss.clients.forEach(client => {
+    if (client.readyState === client.OPEN) {
+      client.send(JSON.stringify(data));
+    }
+  });
+};

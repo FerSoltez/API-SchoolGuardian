@@ -9,6 +9,7 @@ import SchedulesModel from "../models/schedules";
 import DevicesModel from "../models/devices";
 import jwt from "jsonwebtoken";
 import { Op } from "sequelize";
+import { broadcast } from "../index"; // Importar la función broadcast
 
 // Import associations to establish relationships
 import "../models/associations";
@@ -1598,6 +1599,12 @@ const attendanceController = {
         acc[studentId].ping_count = acc[studentId].pings.length;
         return acc;
       }, {});
+
+      broadcast({
+        class_id: id_class,
+        date: search_date,
+        active_pings: Object.values(groupedPings)
+      })
 
       res.status(200).json({
         class_id: id_class,
