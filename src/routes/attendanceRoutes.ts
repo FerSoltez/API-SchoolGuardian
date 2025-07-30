@@ -17,7 +17,7 @@ router.post("/attendance/device", attendanceController.createAttendanceByDevice 
 router.post("/attendance/ping", attendanceController.handleAttendancePing as any);
 
 // Obtener pings activos para una clase
-router.post("/attendance/pings/active", authMiddleware, roleMiddleware(["Professor", "Administrator"]), attendanceController.getActivePings as any);
+router.post("/attendance/pings/active", authMiddleware, attendanceController.getActivePings as any);
 
 // Manejar status de asistencia desde dispositivo (sondeo automático) - PATCH porque actualiza/crea
 router.patch("/attendance/device-status", attendanceController.handleDeviceAttendanceStatus as any);
