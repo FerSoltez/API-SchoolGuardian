@@ -16,6 +16,17 @@ import "../models/associations";
 
 type AttendanceCreationAttributes = InferCreationAttributes<AttendanceModel>;
 
+// Función helper para traducir status de inglés a español
+const translateStatus = (status: string): string => {
+  const statusTranslations: { [key: string]: string } = {
+    'Present': 'Presente',
+    'Absent': 'Ausente',
+    'Late': 'Tarde',
+    'Justified': 'Justificado'
+  };
+  return statusTranslations[status] || status;
+};
+
 // Función helper para verificar si hay clase en ese día y hora
 const verifyClassSchedule = async (id_class: number, attendance_date: string, attendance_time: string) => {
   try {
@@ -1196,11 +1207,11 @@ const attendanceController = {
       res.status(200).json({
         created: results.created.map(item => ({
           student_id: item.attendance.id_student,
-          status: item.attendance.status
+          status: translateStatus(item.attendance.status)
         })),
         marked_absent: results.marked_absent.map(item => ({
           student_id: item.attendance.id_student,
-          status: "Absent"
+          status: translateStatus("Absent")
         })),
         errors: results.errors.map(error => ({
           student_id: error.id_student,
@@ -1325,7 +1336,7 @@ const attendanceController = {
             if (existingPingsCount >= 3) {
               results.created.push({
                 student_id: id_student,
-                status: "Present"
+                status: translateStatus("Present")
               });
               continue;
             }
@@ -1345,7 +1356,7 @@ const attendanceController = {
 
             results.created.push({
               student_id: id_student,
-              status: "Present"
+              status: translateStatus("Present")
             });
 
             // Si este es el tercer ping, consolidar automáticamente
@@ -1377,7 +1388,7 @@ const attendanceController = {
             if (existingPingsCount >= 3) {
               results.marked_absent.push({
                 student_id: id_student,
-                status: "Absent"
+                status: translateStatus("Absent")
               });
               continue;
             }
@@ -1398,7 +1409,7 @@ const attendanceController = {
 
             results.marked_absent.push({
               student_id: id_student,
-              status: "Absent"
+              status: translateStatus("Absent")
             });
 
             // Si este es el tercer ping, consolidar automáticamente
@@ -1459,6 +1470,7 @@ const attendanceController = {
         order: [['ping_time', 'DESC']]
       });
       
+      // Agrupar por estudiante y traducir status para el broadcast
       const groupedPings = activePings.reduce((acc: any, ping: any) => {
         const studentId = ping.id_student;
         if (!acc[studentId]) {
@@ -1471,7 +1483,7 @@ const attendanceController = {
         acc[studentId].pings.push({
           ping_number: ping.ping_number,
           ping_time: ping.ping_time,
-          status: ping.status
+          status: translateStatus(ping.status) // Traducir status para WebSocket
         });
         acc[studentId].ping_count = acc[studentId].pings.length;
         return acc;
@@ -1633,7 +1645,7 @@ const attendanceController = {
         order: [['ping_time', 'DESC']]
       });
 
-      // Agrupar por estudiante
+      // Agrupar por estudiante y traducir status
       const groupedPings = pings.reduce((acc: any, ping: any) => {
         const studentId = ping.id_student;
         if (!acc[studentId]) {
@@ -1646,7 +1658,7 @@ const attendanceController = {
         acc[studentId].pings.push({
           ping_number: ping.ping_number,
           ping_time: ping.ping_time,
-          status: ping.status
+          status: translateStatus(ping.status) // Traducir status para consistencia
         });
         acc[studentId].ping_count = acc[studentId].pings.length;
         return acc;
