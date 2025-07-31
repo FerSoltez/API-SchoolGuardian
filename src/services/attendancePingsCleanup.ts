@@ -27,26 +27,21 @@ class AttendancePingsCleanupService {
     }
   }
 
-  // Limpiar pings que tienen más de 30 segundos DESPUÉS del tercer ping
+  // Limpiar pings de estudiantes que ya completaron sus 3 sondeos (sin restricción de tiempo)
   private async cleanupExpiredPings(): Promise<void> {
     try {
-      const thirtySecondsAgo = new Date(Date.now() - 30 * 1000); // 30 segundos atrás
-
-      // Buscar grupos de estudiantes que tienen 3 pings y el último ping tiene más de 30 segundos
+      // Buscar grupos de estudiantes que tienen 3 pings (completaron el proceso)
       const studentsWithCompletePings = await AttendancePingsModel.findAll({
         attributes: ['id_student', 'id_class'],
         where: {
-          ping_number: 3, // Solo estudiantes que han completado los 3 pings
-          ping_time: {
-            [Op.lt]: thirtySecondsAgo // Y el tercer ping tiene más de 30 segundos
-          }
+          ping_number: 3 // Solo estudiantes que han completado los 3 pings
         },
         group: ['id_student', 'id_class']
       });
 
       let totalDeleted = 0;
 
-      // Para cada estudiante que completó sus 3 pings hace más de 30 segundos
+      // Para cada estudiante que completó sus 3 pings
       for (const student of studentsWithCompletePings) {
         const { id_student, id_class } = student;
 
@@ -62,38 +57,31 @@ class AttendancePingsCleanupService {
       }
 
       if (totalDeleted > 0) {
-
         broadcast({
-          message: `Limpieza automática: ${totalDeleted} pings eliminados (30 seg después del 3er ping)`,
+          message: `Limpieza automática: ${totalDeleted} pings eliminados (estudiantes con 3 sondeos completados)`,
         });
-        console.log(`🗑️ Limpieza automática: ${totalDeleted} pings eliminados (30 seg después del 3er ping)`);
-
+        console.log(`🗑️ Limpieza automática: ${totalDeleted} pings eliminados (estudiantes con 3 sondeos completados)`);
       }
     } catch (error) {
       console.error('❌ Error en limpieza automática de pings:', (error as Error).message);
     }
   }
 
-  // Limpiar pings manualmente (para usar en endpoints)
+  // Limpiar pings de estudiantes que completaron 3 sondeos manualmente
   public async manualCleanup(): Promise<{ deleted: number; message: string }> {
     try {
-      const thirtySecondsAgo = new Date(Date.now() - 30 * 1000);
-
-      // Buscar grupos de estudiantes que tienen 3 pings y el último ping tiene más de 30 segundos
+      // Buscar grupos de estudiantes que tienen 3 pings (completaron el proceso)
       const studentsWithCompletePings = await AttendancePingsModel.findAll({
         attributes: ['id_student', 'id_class'],
         where: {
-          ping_number: 3, // Solo estudiantes que han completado los 3 pings
-          ping_time: {
-            [Op.lt]: thirtySecondsAgo // Y el tercer ping tiene más de 30 segundos
-          }
+          ping_number: 3 // Solo estudiantes que han completado los 3 pings
         },
         group: ['id_student', 'id_class']
       });
 
       let totalDeleted = 0;
 
-      // Para cada estudiante que completó sus 3 pings hace más de 30 segundos
+      // Para cada estudiante que completó sus 3 pings
       for (const student of studentsWithCompletePings) {
         const { id_student, id_class } = student;
 
@@ -110,7 +98,7 @@ class AttendancePingsCleanupService {
 
       return {
         deleted: totalDeleted,
-        message: `Limpieza manual completada: ${totalDeleted} pings eliminados (30 seg después del 3er ping)`
+        message: `Limpieza manual completada: ${totalDeleted} pings eliminados (estudiantes con 3 sondeos completados)`
       };
     } catch (error) {
       throw new Error(`Error en limpieza manual: ${(error as Error).message}`);
@@ -141,8 +129,6 @@ class AttendancePingsCleanupService {
     ready_for_cleanup: number;
   }> {
     try {
-      const thirtySecondsAgo = new Date(Date.now() - 30 * 1000);
-
       const total = await AttendancePingsModel.count();
       
       // Contar estudiantes que tienen exactamente 3 pings
@@ -165,17 +151,8 @@ class AttendancePingsCleanupService {
         }
       }) - studentsWithCompletePings; // Restar los que ya tienen 3 pings
 
-      // Contar estudiantes listos para limpieza (3er ping > 30 segundos)
-      const readyForCleanup = await AttendancePingsModel.count({
-        distinct: true,
-        col: 'id_student',
-        where: {
-          ping_number: 3,
-          ping_time: {
-            [Op.lt]: thirtySecondsAgo
-          }
-        }
-      });
+      // Los estudiantes listos para limpieza son los que tienen 3 pings (sin restricción de tiempo)
+      const readyForCleanup = studentsWithCompletePings;
 
       return { 
         total, 

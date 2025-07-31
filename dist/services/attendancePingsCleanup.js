@@ -71,24 +71,20 @@ class AttendancePingsCleanupService {
             console.log('🛑 Servicio de limpieza detenido');
         }
     }
-    // Limpiar pings que tienen más de 30 segundos DESPUÉS del tercer ping
+    // Limpiar pings de estudiantes que ya completaron sus 3 sondeos (sin restricción de tiempo)
     cleanupExpiredPings() {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const thirtySecondsAgo = new Date(Date.now() - 30 * 1000); // 30 segundos atrás
-                // Buscar grupos de estudiantes que tienen 3 pings y el último ping tiene más de 30 segundos
+                // Buscar grupos de estudiantes que tienen 3 pings (completaron el proceso)
                 const studentsWithCompletePings = yield attendancePings_1.default.findAll({
                     attributes: ['id_student', 'id_class'],
                     where: {
-                        ping_number: 3, // Solo estudiantes que han completado los 3 pings
-                        ping_time: {
-                            [sequelize_1.Op.lt]: thirtySecondsAgo // Y el tercer ping tiene más de 30 segundos
-                        }
+                        ping_number: 3 // Solo estudiantes que han completado los 3 pings
                     },
                     group: ['id_student', 'id_class']
                 });
                 let totalDeleted = 0;
-                // Para cada estudiante que completó sus 3 pings hace más de 30 segundos
+                // Para cada estudiante que completó sus 3 pings
                 for (const student of studentsWithCompletePings) {
                     const { id_student, id_class } = student;
                     // Eliminar TODOS los pings de ese estudiante para esa clase
@@ -102,9 +98,9 @@ class AttendancePingsCleanupService {
                 }
                 if (totalDeleted > 0) {
                     (0, index_1.broadcast)({
-                        message: `Limpieza automática: ${totalDeleted} pings eliminados (30 seg después del 3er ping)`,
+                        message: `Limpieza automática: ${totalDeleted} pings eliminados (estudiantes con 3 sondeos completados)`,
                     });
-                    console.log(`🗑️ Limpieza automática: ${totalDeleted} pings eliminados (30 seg después del 3er ping)`);
+                    console.log(`🗑️ Limpieza automática: ${totalDeleted} pings eliminados (estudiantes con 3 sondeos completados)`);
                 }
             }
             catch (error) {
@@ -112,24 +108,20 @@ class AttendancePingsCleanupService {
             }
         });
     }
-    // Limpiar pings manualmente (para usar en endpoints)
+    // Limpiar pings de estudiantes que completaron 3 sondeos manualmente
     manualCleanup() {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const thirtySecondsAgo = new Date(Date.now() - 30 * 1000);
-                // Buscar grupos de estudiantes que tienen 3 pings y el último ping tiene más de 30 segundos
+                // Buscar grupos de estudiantes que tienen 3 pings (completaron el proceso)
                 const studentsWithCompletePings = yield attendancePings_1.default.findAll({
                     attributes: ['id_student', 'id_class'],
                     where: {
-                        ping_number: 3, // Solo estudiantes que han completado los 3 pings
-                        ping_time: {
-                            [sequelize_1.Op.lt]: thirtySecondsAgo // Y el tercer ping tiene más de 30 segundos
-                        }
+                        ping_number: 3 // Solo estudiantes que han completado los 3 pings
                     },
                     group: ['id_student', 'id_class']
                 });
                 let totalDeleted = 0;
-                // Para cada estudiante que completó sus 3 pings hace más de 30 segundos
+                // Para cada estudiante que completó sus 3 pings
                 for (const student of studentsWithCompletePings) {
                     const { id_student, id_class } = student;
                     // Eliminar TODOS los pings de ese estudiante para esa clase
@@ -143,7 +135,7 @@ class AttendancePingsCleanupService {
                 }
                 return {
                     deleted: totalDeleted,
-                    message: `Limpieza manual completada: ${totalDeleted} pings eliminados (30 seg después del 3er ping)`
+                    message: `Limpieza manual completada: ${totalDeleted} pings eliminados (estudiantes con 3 sondeos completados)`
                 };
             }
             catch (error) {
@@ -172,7 +164,6 @@ class AttendancePingsCleanupService {
     getPingsStats() {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const thirtySecondsAgo = new Date(Date.now() - 30 * 1000);
                 const total = yield attendancePings_1.default.count();
                 // Contar estudiantes que tienen exactamente 3 pings
                 const studentsWithCompletePings = yield attendancePings_1.default.count({
@@ -192,17 +183,8 @@ class AttendancePingsCleanupService {
                         }
                     }
                 })) - studentsWithCompletePings; // Restar los que ya tienen 3 pings
-                // Contar estudiantes listos para limpieza (3er ping > 30 segundos)
-                const readyForCleanup = yield attendancePings_1.default.count({
-                    distinct: true,
-                    col: 'id_student',
-                    where: {
-                        ping_number: 3,
-                        ping_time: {
-                            [sequelize_1.Op.lt]: thirtySecondsAgo
-                        }
-                    }
-                });
+                // Los estudiantes listos para limpieza son los que tienen 3 pings (sin restricción de tiempo)
+                const readyForCleanup = studentsWithCompletePings;
                 return {
                     total,
                     students_with_complete_pings: studentsWithCompletePings,
