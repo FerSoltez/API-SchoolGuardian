@@ -1313,6 +1313,33 @@ const attendanceController = {
         let attendanceData = null;
 
         try {
+          // NUEVA VALIDACIÓN: Verificar si ya existe asistencia definitiva en la tabla Attendance
+          const existingAttendance = await AttendanceModel.findOne({
+            where: {
+              id_student,
+              id_class,
+              attendance_date: attendance_date
+            }
+          });
+
+          // Si ya existe asistencia definitiva, no permitir más pings
+          if (existingAttendance) {
+            if (isFromJson) {
+              results.created.push({
+                student_id: id_student,
+                status: translateStatus(existingAttendance.status),
+                note: "Asistencia ya registrada definitivamente"
+              });
+            } else {
+              results.marked_absent.push({
+                student_id: id_student,
+                status: translateStatus(existingAttendance.status),
+                note: "Asistencia ya registrada definitivamente"
+              });
+            }
+            continue; // Saltar al siguiente estudiante
+          }
+
           // Verificar si el estudiante está en el JSON enviado
           if (attendanceMap.has(id_student)) {
             attendanceData = attendanceMap.get(id_student);
