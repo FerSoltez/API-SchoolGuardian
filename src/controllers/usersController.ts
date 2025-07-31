@@ -83,9 +83,12 @@ const usersController = {
         verification: role !== 'Student' // Solo los estudiantes necesitan verificación
       };
 
-      // Agregar matrícula para estudiantes y profesores
+      // Agregar matrícula para estudiantes y profesores, null para administradores
       if (role === 'Student' || role === 'Professor') {
         userData.matricula = matricula;
+      } else {
+        // Para administradores, establecer explícitamente como null
+        userData.matricula = null;
       }
 
       // Solo agregar user_uuid para estudiantes

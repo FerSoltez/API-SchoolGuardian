@@ -54,10 +54,12 @@ UsersModel.init(
       validate: {
         // Validación personalizada: solo Student y Professor pueden tener matrícula
         isValidForRole(value: string | null) {
-          if (value !== null && this.role === 'Administrator') {
+          // Si es Administrator y tiene matrícula, es error
+          if (value !== null && value !== undefined && this.role === 'Administrator') {
             throw new Error('Los administradores no pueden tener matrícula');
           }
-          if (value === null && (this.role === 'Student' || this.role === 'Professor')) {
+          // Si es Student o Professor y NO tiene matrícula, es error
+          if ((value === null || value === undefined) && (this.role === 'Student' || this.role === 'Professor')) {
             throw new Error('Los estudiantes y profesores deben tener matrícula');
           }
         }
