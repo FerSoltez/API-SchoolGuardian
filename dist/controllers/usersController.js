@@ -136,6 +136,7 @@ const usersController = {
                     id: newUser.id_user,
                     name: newUser.name,
                     email: newUser.email,
+                    matricula: newUser.matricula,
                     role: newUser.role,
                     user_uuid: newUser.user_uuid, // Importante para estudiantes
                     verification: newUser.verification

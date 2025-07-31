@@ -20,8 +20,11 @@ require("../models/associations");
 const devicesController = {
     createDevice: (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         try {
-            const { location, status } = req.body;
+            const { id_device, location, status } = req.body;
             // Validar campos obligatorios
+            if (!id_device) {
+                return res.status(400).json({ message: "El ID del dispositivo es requerido." });
+            }
             if (!location) {
                 return res.status(400).json({ message: "La ubicación del dispositivo es requerida." });
             }
@@ -32,6 +35,11 @@ const devicesController = {
                     message: `Estado inválido. Valores válidos: ${validStatuses.join(', ')}`
                 });
             }
+            // Verificar si ya existe un dispositivo con ese ID
+            const existingDeviceById = yield devices_1.default.findByPk(id_device);
+            if (existingDeviceById) {
+                return res.status(400).json({ message: "Ya existe un dispositivo con este ID." });
+            }
             // Verificar si ya existe un dispositivo en esa ubicación
             const existingDevice = yield devices_1.default.findOne({ where: { location } });
             if (existingDevice) {
@@ -39,6 +47,7 @@ const devicesController = {
             }
             // Crear el dispositivo
             const newDevice = yield devices_1.default.create({
+                id_device,
                 location,
                 status: status || 'Off' // Por defecto 'Off' si no se especifica
             });

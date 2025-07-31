@@ -19,9 +19,13 @@ declare global {
 const devicesController = {
   createDevice: async (req: Request, res: Response) => {
     try {
-      const { location, status } = req.body;
+      const { id_device, location, status } = req.body;
 
       // Validar campos obligatorios
+      if (!id_device) {
+        return res.status(400).json({ message: "El ID del dispositivo es requerido." });
+      }
+      
       if (!location) {
         return res.status(400).json({ message: "La ubicación del dispositivo es requerida." });
       }
@@ -34,6 +38,12 @@ const devicesController = {
         });
       }
 
+      // Verificar si ya existe un dispositivo con ese ID
+      const existingDeviceById = await Devices.findByPk(id_device);
+      if (existingDeviceById) {
+        return res.status(400).json({ message: "Ya existe un dispositivo con este ID." });
+      }
+
       // Verificar si ya existe un dispositivo en esa ubicación
       const existingDevice = await Devices.findOne({ where: { location } });
       if (existingDevice) {
@@ -42,6 +52,7 @@ const devicesController = {
 
       // Crear el dispositivo
       const newDevice = await Devices.create({
+        id_device,
         location,
         status: status || 'Off' // Por defecto 'Off' si no se especifica
       });
