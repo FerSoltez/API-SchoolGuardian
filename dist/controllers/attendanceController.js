@@ -1126,7 +1126,7 @@ const attendanceController = {
     // Manejar llegada de un ping de asistencia
     handleAttendancePing: (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         try {
-            const { id_device, attendances } = req.body;
+            const { id_device, attendances, data_time } = req.body;
             // Validar que los campos requeridos estén presentes
             if (!id_device || !attendances || !Array.isArray(attendances)) {
                 return res.status(400).json({
@@ -1138,6 +1138,10 @@ const attendanceController = {
             if (attendances.length === 0) {
                 console.log(`⚠️ Array de asistencias vacío para dispositivo ${id_device} - Todos los estudiantes se marcarán como ausentes`);
                 console.log(`📋 Comportamiento: Se creará un ping de ausencia para cada estudiante inscrito en la clase activa`);
+                // Si se proporciona data_time, usar ese timestamp para el contexto
+                if (data_time) {
+                    console.log(`🕐 Usando data_time proporcionado: ${data_time}`);
+                }
             }
             // Verificar que el dispositivo existe
             const device = yield devices_1.default.findByPk(id_device);
@@ -1150,20 +1154,30 @@ const attendanceController = {
             let classCheck;
             let id_class;
             let attendance_date;
-            if (attendances.length > 0) {
-                // Usar el primer attendance_time para determinar la clase actual
+            let referenceTime;
+            if (data_time) {
+                // Prioridad 1: Usar data_time si está disponible (más preciso)
+                referenceTime = data_time;
+                console.log(`🎯 Usando data_time para determinar clase: ${data_time}`);
+                classCheck = yield getCurrentClassByDevice(id_device, data_time);
+            }
+            else if (attendances.length > 0) {
+                // Prioridad 2: Usar el primer attendance_time para determinar la clase actual
                 const firstAttendance = attendances[0];
                 if (!firstAttendance.attendance_time) {
                     return res.status(400).json({
-                        message: "Se requiere attendance_time para determinar la clase"
+                        message: "Se requiere attendance_time o data_time para determinar la clase"
                     });
                 }
+                referenceTime = firstAttendance.attendance_time;
+                console.log(`📋 Usando attendance_time del primer estudiante: ${referenceTime}`);
                 classCheck = yield getCurrentClassByDevice(id_device, firstAttendance.attendance_time);
             }
             else {
                 // Array vacío: usar la hora actual para determinar qué clase está activa
                 const currentTime = new Date().toISOString();
-                console.log(`Array vacío - usando hora actual para determinar clase: ${currentTime}`);
+                referenceTime = currentTime;
+                console.log(`🕐 Array vacío - usando hora actual para determinar clase: ${currentTime}`);
                 classCheck = yield getCurrentClassByDevice(id_device, currentTime);
             }
             if (!classCheck.hasClass) {
@@ -1311,12 +1325,14 @@ const attendanceController = {
                             });
                             continue;
                         }
-                        // Usar la hora del primer estudiante detectado o hora actual para el ping de ausente
-                        const dateTime = attendances.length > 0 ?
-                            new Date(attendances[0].attendance_time) :
-                            new Date(); // Array vacío: usar hora actual
+                        // Usar data_time, attendance_time del primer estudiante, o hora actual para el ping de ausente
+                        const dateTime = data_time ?
+                            new Date(data_time) :
+                            (attendances.length > 0 ?
+                                new Date(attendances[0].attendance_time) :
+                                new Date()); // Fallback: usar hora actual
                         const ping_number = existingPingsCount + 1;
-                        console.log(`🚫 Creando ping de ausencia - Estudiante: ${student.name}, Ping: ${ping_number}, Fecha/Hora: ${dateTime}`);
+                        console.log(`🚫 Creando ping de ausencia - Estudiante: ${student.name}, Ping: ${ping_number}, Fecha/Hora: ${dateTime}, Fuente: ${data_time ? 'data_time' : (attendances.length > 0 ? 'attendance_time' : 'hora_actual')}`);
                         // Insertar nuevo ping como ausente
                         const newAbsentPing = yield attendancePings_1.default.create({
                             id_student,
@@ -1419,7 +1435,13 @@ const attendanceController = {
             res.status(200).json({
                 created: results.created,
                 marked_absent: results.marked_absent,
-                errors: results.errors
+                errors: results.errors,
+                metadata: {
+                    reference_time: referenceTime,
+                    source: data_time ? 'data_time' : (attendances.length > 0 ? 'attendance_time' : 'current_time'),
+                    class_id: id_class,
+                    attendance_date: attendance_date
+                }
             });
         }
         catch (error) {
