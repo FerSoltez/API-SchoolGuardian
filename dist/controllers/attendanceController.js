@@ -1435,13 +1435,7 @@ const attendanceController = {
             res.status(200).json({
                 created: results.created,
                 marked_absent: results.marked_absent,
-                errors: results.errors,
-                metadata: {
-                    reference_time: referenceTime,
-                    source: data_time ? 'data_time' : (attendances.length > 0 ? 'attendance_time' : 'current_time'),
-                    class_id: id_class,
-                    attendance_date: attendance_date
-                }
+                errors: results.errors
             });
         }
         catch (error) {
