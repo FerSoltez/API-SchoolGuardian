@@ -110,22 +110,6 @@ const timeToMinutes = (time) => {
     const [hours, minutes] = time.split(':').map(Number);
     return hours * 60 + minutes;
 };
-// Función helper para generar timestamp en GMT-5 (Yucatán, México)
-const getMexicoTime = () => {
-    const now = new Date();
-    const mexicoTime = new Date(now.getTime() - (5 * 60 * 60 * 1000)); // GMT-5
-    return {
-        dateTime: mexicoTime,
-        isoString: mexicoTime.toISOString().slice(0, -1) + '-05:00',
-        date: mexicoTime.toISOString().split('T')[0], // YYYY-MM-DD
-        time: mexicoTime.toTimeString().split(' ')[0] // HH:MM:SS
-    };
-};
-// Función helper para convertir timestamp UTC a formato GMT-5 (Yucatán, México)
-const convertToMexicoTime = (utcTimestamp) => {
-    const mexicoTime = new Date(utcTimestamp.getTime() - (5 * 60 * 60 * 1000));
-    return mexicoTime.toISOString().slice(0, -1) + '-05:00';
-};
 // Función helper para determinar la clase actual basándose en el dispositivo y la hora
 const getCurrentClassByDevice = (id_device, attendance_time) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -139,7 +123,7 @@ const getCurrentClassByDevice = (id_device, attendance_time) => __awaiter(void 0
                 message: `Dispositivo con ID ${id_device} no encontrado`
             };
         }
-        // Extraer fecha y hora del attendance_time (formato ISO con zona horaria: 2025-07-14T15:30:00-05:00 o 2025-07-14T15:30:00Z)
+        // Extraer fecha y hora del attendance_time (formato ISO: 2025-07-14T15:30:00Z)
         const dateTime = new Date(attendance_time);
         const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         const weekday = weekdays[dateTime.getDay()];
@@ -433,10 +417,11 @@ const handleSingleAttendance = (req, res) => __awaiter(void 0, void 0, void 0, f
     if (!classExists) {
         return res.status(404).json({ message: "Clase no encontrada" });
     }
-    // Obtener fecha y hora actual en GMT-5 (Yucatán, México)
-    const mexicoTime = getMexicoTime();
-    const currentDate = mexicoTime.date;
-    const currentTime = mexicoTime.time;
+    // Obtener fecha y hora actual en GMT-6 (México)
+    const now = new Date();
+    const mexicoTime = new Date(now.getTime() - (6 * 60 * 60 * 1000)); // GMT-6
+    const currentDate = mexicoTime.toISOString().split('T')[0]; // YYYY-MM-DD
+    const currentTime = mexicoTime.toTimeString().split(' ')[0]; // HH:MM:SS
     // Buscar si ya existe un registro de asistencia hoy para ese estudiante y esa clase
     const existingAttendance = yield attendance_1.default.findOne({
         where: {
@@ -1139,9 +1124,6 @@ const attendanceController = {
         }
     }),
     // Manejar llegada de un ping de asistencia
-    // Acepta formatos de fecha:
-    // - GMT-5 (recomendado para Yucatán): "2025-07-28T10:35:00-05:00"
-    // - UTC (compatible): "2025-07-28T15:35:00Z"
     handleAttendancePing: (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         try {
             const { id_device, attendances, data_time } = req.body;
@@ -1193,10 +1175,10 @@ const attendanceController = {
             }
             else {
                 // Array vacío: usar la hora actual para determinar qué clase está activa
-                const mexicoTime = getMexicoTime();
-                referenceTime = mexicoTime.isoString;
-                console.log(`🕐 Array vacío - usando hora actual GMT-5 para determinar clase: ${mexicoTime.isoString}`);
-                classCheck = yield getCurrentClassByDevice(id_device, mexicoTime.isoString);
+                const currentTime = new Date().toISOString();
+                referenceTime = currentTime;
+                console.log(`🕐 Array vacío - usando hora actual para determinar clase: ${currentTime}`);
+                classCheck = yield getCurrentClassByDevice(id_device, currentTime);
             }
             if (!classCheck.hasClass) {
                 return res.status(400).json({
@@ -1348,9 +1330,9 @@ const attendanceController = {
                             new Date(data_time) :
                             (attendances.length > 0 ?
                                 new Date(attendances[0].attendance_time) :
-                                getMexicoTime().dateTime); // Fallback: usar hora actual GMT-5
+                                new Date()); // Fallback: usar hora actual
                         const ping_number = existingPingsCount + 1;
-                        console.log(`🚫 Creando ping de ausencia - Estudiante: ${student.name}, Ping: ${ping_number}, Fecha/Hora: ${dateTime}, Fuente: ${data_time ? 'data_time' : (attendances.length > 0 ? 'attendance_time' : 'hora_actual_GMT-5')}`);
+                        console.log(`🚫 Creando ping de ausencia - Estudiante: ${student.name}, Ping: ${ping_number}, Fecha/Hora: ${dateTime}, Fuente: ${data_time ? 'data_time' : (attendances.length > 0 ? 'attendance_time' : 'hora_actual')}`);
                         // Insertar nuevo ping como ausente
                         const newAbsentPing = yield attendancePings_1.default.create({
                             id_student,
@@ -1428,7 +1410,7 @@ const attendanceController = {
                 }
                 acc[studentId].pings.push({
                     ping_number: ping.ping_number,
-                    ping_time: convertToMexicoTime(ping.ping_time), // Convertir a GMT-5 para WebSocket
+                    ping_time: ping.ping_time,
                     status: translateStatus(ping.status) // Traducir status para WebSocket
                 });
                 acc[studentId].ping_count = acc[studentId].pings.length;
@@ -1436,16 +1418,14 @@ const attendanceController = {
             }, {});
             console.log(`📡 Enviando por WebSocket - Clase: ${id_class}, Fecha: ${attendance_date}, Pings encontrados: ${activePings.length}`);
             if (activePings.length > 0) {
-                const firstPingGMT5 = convertToMexicoTime(activePings[activePings.length - 1].ping_time);
-                const lastPingGMT5 = convertToMexicoTime(activePings[0].ping_time);
-                console.log(`🕐 Rango de ping_time (GMT-5): ${firstPingGMT5} a ${lastPingGMT5}`);
+                console.log(`🕐 Rango de ping_time: ${activePings[activePings.length - 1].ping_time} a ${activePings[0].ping_time}`);
             }
             (0, index_1.broadcast)({
                 type: 'active_pings_update',
                 class_id: id_class,
                 date: attendance_date,
                 active_pings: Object.values(groupedPings),
-                timestamp: getMexicoTime().isoString, // Usar GMT-5 para timestamp del WebSocket
+                timestamp: new Date(),
                 processing_results: {
                     created: results.created.length,
                     marked_absent: results.marked_absent.length,
@@ -1561,7 +1541,7 @@ const attendanceController = {
             if (!id_class) {
                 return res.status(400).json({ message: "ID de clase es requerido" });
             }
-            const search_date = date || getMexicoTime().date;
+            const search_date = date || new Date().toISOString().split('T')[0];
             const pings = yield attendancePings_1.default.findAll({
                 where: {
                     id_class,
@@ -1592,7 +1572,7 @@ const attendanceController = {
                 }
                 acc[studentId].pings.push({
                     ping_number: ping.ping_number,
-                    ping_time: convertToMexicoTime(ping.ping_time), // Convertir a GMT-5 para consistencia
+                    ping_time: ping.ping_time,
                     status: translateStatus(ping.status) // Traducir status para consistencia
                 });
                 acc[studentId].ping_count = acc[studentId].pings.length;
