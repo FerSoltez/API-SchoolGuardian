@@ -94,6 +94,12 @@ const getMexicoTime = (): {
   };
 };
 
+// Función helper para convertir timestamp UTC a formato GMT-5 (Yucatán, México)
+const convertToMexicoTime = (utcTimestamp: Date): string => {
+  const mexicoTime = new Date(utcTimestamp.getTime() - (5 * 60 * 60 * 1000));
+  return mexicoTime.toISOString().slice(0, -1) + '-05:00';
+};
+
 // Función helper para determinar la clase actual basándose en el dispositivo y la hora
 const getCurrentClassByDevice = async (id_device: string, attendance_time: string) => {
   try {
@@ -1571,7 +1577,7 @@ const attendanceController = {
         }
         acc[studentId].pings.push({
           ping_number: ping.ping_number,
-          ping_time: ping.ping_time,
+          ping_time: convertToMexicoTime(ping.ping_time), // Convertir a GMT-5 para WebSocket
           status: translateStatus(ping.status) // Traducir status para WebSocket
         });
         acc[studentId].ping_count = acc[studentId].pings.length;
@@ -1580,7 +1586,9 @@ const attendanceController = {
       
       console.log(`📡 Enviando por WebSocket - Clase: ${id_class}, Fecha: ${attendance_date}, Pings encontrados: ${activePings.length}`);
       if (activePings.length > 0) {
-        console.log(`🕐 Rango de ping_time: ${activePings[activePings.length - 1].ping_time} a ${activePings[0].ping_time}`);
+        const firstPingGMT5 = convertToMexicoTime(activePings[activePings.length - 1].ping_time);
+        const lastPingGMT5 = convertToMexicoTime(activePings[0].ping_time);
+        console.log(`🕐 Rango de ping_time (GMT-5): ${firstPingGMT5} a ${lastPingGMT5}`);
       }
       
       broadcast({
@@ -1588,7 +1596,7 @@ const attendanceController = {
         class_id: id_class,
         date: attendance_date,
         active_pings: Object.values(groupedPings),
-        timestamp: new Date(),
+        timestamp: getMexicoTime().isoString, // Usar GMT-5 para timestamp del WebSocket
 
         processing_results: {
           created: results.created.length,
@@ -1751,7 +1759,7 @@ const attendanceController = {
         }
         acc[studentId].pings.push({
           ping_number: ping.ping_number,
-          ping_time: ping.ping_time,
+          ping_time: convertToMexicoTime(ping.ping_time), // Convertir a GMT-5 para consistencia
           status: translateStatus(ping.status) // Traducir status para consistencia
         });
         acc[studentId].ping_count = acc[studentId].pings.length;
