@@ -368,7 +368,8 @@ const usersController = {
           id: user.id_user,
           email: user.email,
           name: user.name,
-          role: user.role
+          role: user.role,
+          profile_image_url: user.profile_image_url || null
         }
       });
     } catch (error) {

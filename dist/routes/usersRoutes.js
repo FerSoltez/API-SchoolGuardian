@@ -9,7 +9,7 @@ const authMiddleware_1 = __importDefault(require("../middleware/authMiddleware")
 const cloudinaryConfig_1 = __importDefault(require("../config/cloudinaryConfig")); // Importar configuración de Cloudinary
 const router = (0, express_1.Router)();
 // User registration and authentication routes
-router.post("/users", usersController_1.default.createUser);
+router.post("/users", cloudinaryConfig_1.default.single('profile_image'), usersController_1.default.createUser);
 router.post("/users/test", usersController_1.default.createStudentForTesting); // Nueva ruta para crear estudiantes de prueba
 router.post("/users/login", usersController_1.default.loginUser);
 router.post("/users/verify-email", usersController_1.default.verifyEmail);
@@ -23,7 +23,6 @@ router.delete("/users/:id", authMiddleware_1.default, usersController_1.default.
 router.post("/users/changePass", usersController_1.default.changePassword);
 router.post("/users/emailChangePass", usersController_1.default.sendPasswordResetEmail);
 // Profile image routes
-router.post("/users/:id/upload-image", authMiddleware_1.default, cloudinaryConfig_1.default.single('profile_image'), usersController_1.default.uploadProfileImage);
 router.get("/users/:id/profile-image", usersController_1.default.getProfileImage);
 router.delete("/users/:id/profile-image", authMiddleware_1.default, usersController_1.default.deleteProfileImage);
 // Database utilities

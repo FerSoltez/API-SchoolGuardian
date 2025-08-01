@@ -88,6 +88,10 @@ const usersController = {
                 userData.user_uuid = user_uuid;
             }
             // Para maestros y administradores, user_uuid se omite completamente
+            // Si se subió una imagen de perfil, agregarla a los datos del usuario
+            if (req.file && req.file.path) {
+                userData.profile_image_url = req.file.path;
+            }
             // Crear el nuevo usuario
             const newUser = yield users_1.default.create(userData);
             // Enviar correo de verificación SOLO para estudiantes
@@ -143,7 +147,8 @@ const usersController = {
                     matricula: newUser.matricula,
                     role: newUser.role,
                     user_uuid: newUser.user_uuid, // Importante para estudiantes
-                    verification: newUser.verification
+                    verification: newUser.verification,
+                    profile_image_url: newUser.profile_image_url || null // Incluir la URL de la imagen si existe, null si no
                 }
             });
         }
@@ -301,7 +306,8 @@ const usersController = {
                     id: user.id_user,
                     email: user.email,
                     name: user.name,
-                    role: user.role
+                    role: user.role,
+                    profile_image_url: user.profile_image_url || null
                 }
             });
         }
@@ -711,34 +717,6 @@ const usersController = {
                     timestamp: new Date().toISOString()
                 }
             });
-        }
-    }),
-    // Subir foto de perfil
-    uploadProfileImage: (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-        try {
-            const { id } = req.params;
-            if (!req.file) {
-                return res.status(400).json({ message: "No se ha subido ningún archivo" });
-            }
-            // Verificar que el usuario existe
-            const user = yield users_1.default.findByPk(id);
-            if (!user) {
-                return res.status(404).json({ message: "Usuario no encontrado" });
-            }
-            // Actualizar la URL de la imagen de perfil en la base de datos
-            yield users_1.default.update({ profile_image_url: req.file.path }, { where: { id_user: id } });
-            // Obtener el usuario actualizado
-            const updatedUser = yield users_1.default.findByPk(id, {
-                attributes: ['id_user', 'name', 'email', 'role', 'profile_image_url', 'matricula']
-            });
-            res.status(200).json({
-                message: "Foto de perfil subida exitosamente",
-                user: updatedUser,
-                image_url: req.file.path
-            });
-        }
-        catch (error) {
-            res.status(500).json({ error: error.message });
         }
     }),
     // Obtener foto de perfil
