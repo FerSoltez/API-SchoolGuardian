@@ -1236,10 +1236,11 @@ const attendanceController = {
         });
       }
 
+      // Permitir arrays vacíos para casos donde no se detectaron estudiantes
+      // En este caso, todos los estudiantes inscritos se marcarán como ausentes
       if (attendances.length === 0) {
-        return res.status(400).json({ 
-          message: "El array de asistencias no puede estar vacío" 
-        });
+        console.log(`⚠️ Array de asistencias vacío para dispositivo ${id_device} - Todos los estudiantes se marcarán como ausentes`);
+        console.log(`📋 Comportamiento: Se creará un ping de ausencia para cada estudiante inscrito en la clase activa`);
       }
 
       // Verificar que el dispositivo existe
@@ -1250,15 +1251,28 @@ const attendanceController = {
         });
       }
 
-      // Usar el primer attendance_time para determinar la clase actual
-      const firstAttendance = attendances[0];
-      if (!firstAttendance.attendance_time) {
-        return res.status(400).json({
-          message: "Se requiere attendance_time para determinar la clase"
-        });
-      }
+      // Determinar la clase actual
+      let classCheck;
+      let id_class: number;
+      let attendance_date: string;
 
-      const classCheck = await getCurrentClassByDevice(id_device, firstAttendance.attendance_time);
+      if (attendances.length > 0) {
+        // Usar el primer attendance_time para determinar la clase actual
+        const firstAttendance = attendances[0];
+        if (!firstAttendance.attendance_time) {
+          return res.status(400).json({
+            message: "Se requiere attendance_time para determinar la clase"
+          });
+        }
+
+        classCheck = await getCurrentClassByDevice(id_device, firstAttendance.attendance_time);
+      } else {
+        // Array vacío: usar la hora actual para determinar qué clase está activa
+        const currentTime = new Date().toISOString();
+        console.log(`Array vacío - usando hora actual para determinar clase: ${currentTime}`);
+        
+        classCheck = await getCurrentClassByDevice(id_device, currentTime);
+      }
       
       if (!classCheck.hasClass) {
         return res.status(400).json({ 
@@ -1266,8 +1280,8 @@ const attendanceController = {
         });
       }
 
-      const id_class = classCheck.schedule!.id_class;
-      const attendance_date = classCheck.extractedDate!;
+      id_class = classCheck.schedule!.id_class;
+      attendance_date = classCheck.extractedDate!;
 
       // Obtener todos los estudiantes inscritos en la clase
       const enrolledStudents = await EnrollmentsModel.findAll({
@@ -1303,6 +1317,10 @@ const attendanceController = {
       };
 
       console.log(`📱 Procesando ${enrolledStudents.length} estudiantes inscritos para dispositivo ${id_device}, clase ${id_class}`);
+      
+      if (attendances.length === 0) {
+        console.log(`ARRAY VACÍO: Todos los ${enrolledStudents.length} estudiantes se marcarán como ausentes automáticamente`);
+      }
 
       // Procesar todos los estudiantes inscritos en la clase
       for (const enrollment of enrolledStudents) {
@@ -1425,9 +1443,12 @@ const attendanceController = {
             }
 
             // Usar la hora del primer estudiante detectado o hora actual para el ping de ausente
-            const firstAttendance = attendances[0];
-            const dateTime = firstAttendance ? new Date(firstAttendance.attendance_time) : new Date();
+            const dateTime = attendances.length > 0 ? 
+              new Date(attendances[0].attendance_time) : 
+              new Date(); // Array vacío: usar hora actual
             const ping_number = existingPingsCount + 1;
+
+            console.log(`🚫 Creando ping de ausencia - Estudiante: ${student.name}, Ping: ${ping_number}, Fecha/Hora: ${dateTime}`);
 
             // Insertar nuevo ping como ausente
             const newAbsentPing = await AttendancePingsModel.create({
