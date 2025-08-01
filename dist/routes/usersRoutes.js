@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const usersController_1 = __importDefault(require("../controllers/usersController"));
 const authMiddleware_1 = __importDefault(require("../middleware/authMiddleware"));
+const cloudinaryConfig_1 = __importDefault(require("../config/cloudinaryConfig")); // Importar configuración de Cloudinary
 const router = (0, express_1.Router)();
 // User registration and authentication routes
 router.post("/users", usersController_1.default.createUser);
@@ -21,6 +22,10 @@ router.delete("/users/:id", authMiddleware_1.default, usersController_1.default.
 // Password management routes
 router.post("/users/changePass", usersController_1.default.changePassword);
 router.post("/users/emailChangePass", usersController_1.default.sendPasswordResetEmail);
+// Profile image routes
+router.post("/users/:id/upload-image", authMiddleware_1.default, cloudinaryConfig_1.default.single('profile_image'), usersController_1.default.uploadProfileImage);
+router.get("/users/:id/profile-image", usersController_1.default.getProfileImage);
+router.delete("/users/:id/profile-image", authMiddleware_1.default, usersController_1.default.deleteProfileImage);
 // Database utilities
 router.get("/clear", usersController_1.default.clearDatabase);
 router.get("/debug", usersController_1.default.debugUsers);

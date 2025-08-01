@@ -97,6 +97,11 @@ const usersController = {
       }
       // Para maestros y administradores, user_uuid se omite completamente
 
+      // Si se subió una imagen de perfil, agregarla a los datos del usuario
+      if (req.file && req.file.path) {
+        userData.profile_image_url = req.file.path;
+      }
+
       // Crear el nuevo usuario
       const newUser = await Users.create(userData);
 
@@ -162,7 +167,8 @@ const usersController = {
           matricula: newUser.matricula,
           role: newUser.role,
           user_uuid: newUser.user_uuid, // Importante para estudiantes
-          verification: newUser.verification
+          verification: newUser.verification,
+          profile_image_url: newUser.profile_image_url || null // Incluir la URL de la imagen si existe, null si no
         }
       });
     } catch (error) {
@@ -639,7 +645,7 @@ const usersController = {
   debugUsers: async (req: Request, res: Response) => {
     try {
       const users = await Users.findAll({
-        attributes: ['id_user', 'name', 'email', 'role', 'user_uuid', 'verification', 'attempts'],
+        attributes: ['id_user', 'name', 'email', 'role', 'user_uuid', 'verification', 'attempts', 'profile_image_url', 'matricula'],
         limit: 10
       });
       
@@ -825,6 +831,67 @@ const usersController = {
           timestamp: new Date().toISOString()
         }
       });
+    }
+  },
+
+  // Obtener foto de perfil
+  getProfileImage: async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      const user = await Users.findByPk(id, {
+        attributes: ['id_user', 'name', 'profile_image_url']
+      });
+
+      if (!user) {
+        return res.status(404).json({ message: "Usuario no encontrado" });
+      }
+
+      if (!user.profile_image_url) {
+        return res.status(404).json({ message: "Este usuario no tiene foto de perfil" });
+      }
+
+      res.status(200).json({
+        user_id: user.id_user,
+        name: user.name,
+        profile_image_url: user.profile_image_url
+      });
+
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  },
+
+  // Eliminar foto de perfil
+  deleteProfileImage: async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      const user = await Users.findByPk(id);
+      if (!user) {
+        return res.status(404).json({ message: "Usuario no encontrado" });
+      }
+
+      if (!user.profile_image_url) {
+        return res.status(400).json({ message: "Este usuario no tiene foto de perfil para eliminar" });
+      }
+
+      // Opcional: Eliminar de Cloudinary también
+      // const publicId = user.profile_image_url.split('/').pop()?.split('.')[0];
+      // await cloudinary.uploader.destroy(`user-profiles/${publicId}`);
+
+      // Actualizar la base de datos
+      await Users.update(
+        { profile_image_url: undefined },
+        { where: { id_user: id } }
+      );
+
+      res.status(200).json({
+        message: "Foto de perfil eliminada exitosamente"
+      });
+
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
     }
   },
 };

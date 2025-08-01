@@ -21,11 +21,14 @@
     "@types/sequelize": "^4.28.20",
     "@types/ws": "^8.18.1",
     "bcryptjs": "^3.0.2",
+    "cloudinary": "^2.7.0",
     "cors": "^2.8.5",
     "dotenv": "^17.0.1",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "mariadb": "^3.4.4",
+    "multer": "^2.0.2",
+    "multer-storage-cloudinary": "^4.0.0",
     "mysql2": "^3.14.1",
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.5",
@@ -38,6 +41,7 @@
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.0.0",
     "@types/nodemailer": "^6.4.17",
     "@types/uuid": "^10.0.0",
     "nodemon": "^3.1.10"

@@ -11,6 +11,7 @@ interface UsersAttributes {
   user_uuid?: string; // Nullable según el nuevo esquema - API valida esto
   verification: boolean;
   attempts: number;
+  profile_image_url?: string; // URL de la imagen de perfil en Cloudinary
 }
 
 interface UsersCreationAttributes {
@@ -22,6 +23,7 @@ interface UsersCreationAttributes {
   user_uuid?: string; // Nullable - API valida esto
   verification: boolean;
   attempts: number;
+  profile_image_url?: string; // URL de la imagen de perfil en Cloudinary
 }
 
 class UsersModel extends Model<UsersAttributes, UsersCreationAttributes> implements UsersAttributes {
@@ -34,6 +36,7 @@ class UsersModel extends Model<UsersAttributes, UsersCreationAttributes> impleme
   public user_uuid?: string; // Nullable
   public verification!: boolean;
   public attempts!: number;
+  public profile_image_url?: string; // URL de la imagen de perfil en Cloudinary
 }
 
 UsersModel.init(
@@ -93,6 +96,11 @@ UsersModel.init(
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0, // Cambiado a 0 según el nuevo esquema
+    },
+    profile_image_url: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+      defaultValue: null,
     },
   },
   {

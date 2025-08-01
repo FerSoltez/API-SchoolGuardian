@@ -61,6 +61,11 @@ UsersModel.init({
         allowNull: false,
         defaultValue: 0, // Cambiado a 0 según el nuevo esquema
     },
+    profile_image_url: {
+        type: sequelize_1.DataTypes.STRING(500),
+        allowNull: true,
+        defaultValue: null,
+    },
 }, {
     sequelize: database_1.sequelize,
     modelName: "Users",
