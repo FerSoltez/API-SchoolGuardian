@@ -1372,6 +1372,8 @@ const attendanceController = {
             const dateTime = new Date(attendanceData.attendance_time);
             const ping_number = existingPingsCount + 1;
 
+            console.log(`💾 Guardando ping - Estudiante: ${id_student}, Clase: ${id_class}, Ping: ${ping_number}, Status: Present, Fecha/Hora: ${dateTime}`);
+
             // Insertar nuevo ping
             const newPing = await AttendancePingsModel.create({
               id_student,
@@ -1380,6 +1382,8 @@ const attendanceController = {
               status: 'Present',
               ping_number
             });
+
+            console.log(`✅ Ping guardado exitosamente - ping_time: ${newPing.ping_time}`);
 
             results.created.push({
               student_id: id_student,
@@ -1478,14 +1482,17 @@ const attendanceController = {
             // Al final de handleAttendancePing, justo antes del broadcast
       console.log(`✅ Procesamiento completado: ${results.created.length} creados, ${results.marked_absent.length} ausentes, ${results.errors.length} errores`);
       
+      // Obtener la fecha de inicio y fin del día en formato local
+      const startOfDay = new Date(attendance_date + 'T00:00:00');
+      const endOfDay = new Date(attendance_date + 'T23:59:59');
+      
+      console.log(`🔍 Consultando pings para clase ${id_class} entre ${startOfDay.toISOString()} y ${endOfDay.toISOString()}`);
+      
       const activePings = await AttendancePingsModel.findAll({
         where: {
           id_class,
           ping_time: {
-            [Op.between]: [
-              new Date(attendance_date + ' 00:00:00'),
-              new Date(attendance_date + ' 23:59:59')
-            ]
+            [Op.between]: [startOfDay, endOfDay]
           }
         },
         include: [
@@ -1515,6 +1522,11 @@ const attendanceController = {
         acc[studentId].ping_count = acc[studentId].pings.length;
         return acc;
       }, {});
+      
+      console.log(`📡 Enviando por WebSocket - Clase: ${id_class}, Fecha: ${attendance_date}, Pings encontrados: ${activePings.length}`);
+      if (activePings.length > 0) {
+        console.log(`🕐 Rango de ping_time: ${activePings[activePings.length - 1].ping_time} a ${activePings[0].ping_time}`);
+      }
       
       broadcast({
         type: 'active_pings_update',
