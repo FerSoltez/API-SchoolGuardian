@@ -17,7 +17,7 @@ router.get("/users/verify-email", usersController_1.default.verifyAccountGet);
 // User management routes
 router.post("/users/get", usersController_1.default.getAllUsers);
 router.post("/users/detalle", authMiddleware_1.default, usersController_1.default.getUser);
-router.patch("/users/:id", authMiddleware_1.default, usersController_1.default.partialUpdateUser);
+router.patch("/users/:id", authMiddleware_1.default, cloudinaryConfig_1.default.single('profile_image'), usersController_1.default.partialUpdateUser);
 router.delete("/users/:id", authMiddleware_1.default, usersController_1.default.deleteUser);
 // Password management routes
 router.post("/users/changePass", usersController_1.default.changePassword);

@@ -15,7 +15,7 @@ router.get("/users/verify-email", usersController.verifyAccountGet as any);
 // User management routes
 router.post("/users/get", usersController.getAllUsers);
 router.post("/users/detalle", authMiddleware, usersController.getUser as any);
-router.patch("/users/:id", authMiddleware, usersController.partialUpdateUser as any);
+router.patch("/users/:id", authMiddleware, upload.single('profile_image'), usersController.partialUpdateUser as any);
 router.delete("/users/:id", authMiddleware, usersController.deleteUser as any);
 
 // Password management routes

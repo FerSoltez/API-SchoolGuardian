@@ -21,6 +21,7 @@ const classes_1 = __importDefault(require("../models/classes"));
 const enrollments_1 = __importDefault(require("../models/enrollments"));
 const schedules_1 = __importDefault(require("../models/schedules"));
 const emailTransporter_1 = __importDefault(require("../utils/emailTransporter"));
+const cloudinary_1 = require("cloudinary");
 // Import associations to establish relationships
 require("../models/associations");
 const cuentasBloqueadas = {};
@@ -450,17 +451,52 @@ const usersController = {
                     }
                 }
             }
+            // Preparar datos de actualización
+            const updateData = Object.assign({}, req.body);
             // Si se está actualizando la contraseña, hashearla
-            if (req.body.password) {
-                req.body.password = yield bcryptjs_1.default.hash(req.body.password, 10);
+            if (updateData.password) {
+                updateData.password = yield bcryptjs_1.default.hash(updateData.password, 10);
             }
-            yield users_1.default.update(req.body, { where: { id_user: id } });
+            // Manejar actualización de imagen de perfil
+            if (req.file && req.file.path) {
+                console.log("🖼️ Nueva imagen detectada:", {
+                    fileName: req.file.filename,
+                    path: req.file.path,
+                    size: req.file.size
+                });
+                // Si el usuario ya tiene una imagen anterior, intentar eliminarla de Cloudinary
+                if (user.profile_image_url) {
+                    try {
+                        // Extraer el public_id de la URL de Cloudinary
+                        const urlParts = user.profile_image_url.split('/');
+                        const fileNameWithExtension = urlParts[urlParts.length - 1];
+                        const publicId = `user-profiles/${fileNameWithExtension.split('.')[0]}`;
+                        console.log("🗑️ Eliminando imagen anterior de Cloudinary:", publicId);
+                        yield cloudinary_1.v2.uploader.destroy(publicId);
+                        console.log("✅ Imagen anterior eliminada exitosamente");
+                    }
+                    catch (error) {
+                        console.log("⚠️ No se pudo eliminar la imagen anterior:", error.message);
+                        // No fallar la actualización si no se puede eliminar la imagen anterior
+                    }
+                }
+                // Agregar la nueva URL de imagen a los datos de actualización
+                updateData.profile_image_url = req.file.path;
+                console.log("✅ Nueva imagen configurada:", req.file.path);
+            }
+            yield users_1.default.update(updateData, { where: { id_user: id } });
             const updatedUser = yield users_1.default.findByPk(id, {
                 attributes: { exclude: ['password'] }
+            });
+            console.log("✅ Usuario actualizado exitosamente:", {
+                userId: updatedUser === null || updatedUser === void 0 ? void 0 : updatedUser.id_user,
+                hasNewImage: !!req.file,
+                profileImageUrl: (updatedUser === null || updatedUser === void 0 ? void 0 : updatedUser.profile_image_url) || null
             });
             res.status(200).json(updatedUser);
         }
         catch (error) {
+            console.log("❌ Error en partialUpdateUser:", error.message);
             res.status(500).json({ error: error.message });
         }
     }),
@@ -759,9 +795,19 @@ const usersController = {
             if (!user.profile_image_url) {
                 return res.status(400).json({ message: "Este usuario no tiene foto de perfil para eliminar" });
             }
-            // Opcional: Eliminar de Cloudinary también
-            // const publicId = user.profile_image_url.split('/').pop()?.split('.')[0];
-            // await cloudinary.uploader.destroy(`user-profiles/${publicId}`);
+            // Eliminar de Cloudinary
+            try {
+                const urlParts = user.profile_image_url.split('/');
+                const fileNameWithExtension = urlParts[urlParts.length - 1];
+                const publicId = `user-profiles/${fileNameWithExtension.split('.')[0]}`;
+                console.log("🗑️ Eliminando imagen de Cloudinary:", publicId);
+                yield cloudinary_1.v2.uploader.destroy(publicId);
+                console.log("✅ Imagen eliminada de Cloudinary exitosamente");
+            }
+            catch (error) {
+                console.log("⚠️ No se pudo eliminar la imagen de Cloudinary:", error.message);
+                // Continuar con la eliminación de la base de datos aunque falle Cloudinary
+            }
             // Actualizar la base de datos
             yield users_1.default.update({ profile_image_url: undefined }, { where: { id_user: id } });
             res.status(200).json({
