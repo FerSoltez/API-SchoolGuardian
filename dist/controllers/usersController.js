@@ -298,7 +298,13 @@ const usersController = {
             }
             // Restablecer intentos en caso de inicio de sesión exitoso
             yield users_1.default.update({ attempts: 3 }, { where: { id_user: user.id_user } });
-            const token = jsonwebtoken_1.default.sign({ id: user.id_user, role: user.role }, process.env.JWT_SECRET || "your_jwt_secret", { expiresIn: "1h" });
+            const token = jsonwebtoken_1.default.sign({ id: user.id_user, role: user.role }, process.env.JWT_SECRET || 'secret_key', { expiresIn: "1h" });
+            console.log("🔑 Login exitoso - Token generado:", {
+                userId: user.id_user,
+                userRole: user.role,
+                tokenPreview: token.substring(0, 30) + "...",
+                jwtSecret: process.env.JWT_SECRET ? "✅ Configurado" : "❌ No encontrado"
+            });
             res.status(200).json({
                 message: "Inicio de sesión exitoso",
                 token,

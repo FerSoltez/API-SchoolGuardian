@@ -357,9 +357,16 @@ const usersController = {
   
       const token = jwt.sign(
         { id: user.id_user, role: user.role }, 
-        process.env.JWT_SECRET || "your_jwt_secret", 
+        process.env.JWT_SECRET || 'secret_key', 
         { expiresIn: "1h" }
       );
+
+      console.log("🔑 Login exitoso - Token generado:", {
+        userId: user.id_user,
+        userRole: user.role,
+        tokenPreview: token.substring(0, 30) + "...",
+        jwtSecret: process.env.JWT_SECRET ? "✅ Configurado" : "❌ No encontrado"
+      });
   
       res.status(200).json({ 
         message: "Inicio de sesión exitoso", 
