@@ -15,9 +15,11 @@ const storage = new CloudinaryStorage({
         folder: 'user-profiles', // Carpeta específica para fotos de perfil
         format: async (req: Request, file: Express.Multer.File) => 'png',
         public_id: (req: Request, file: Express.Multer.File) => {
-            // Usar el ID del usuario o email para identificar la imagen
-            const userId = req.body.user_id || req.params.id || Date.now();
-            return `profile_${userId}`;
+            // Usar ID único con timestamp para evitar sobrescritura automática
+            const userId = req.body.user_id || req.params.id || 'unknown';
+            const timestamp = Date.now();
+            const randomSuffix = Math.random().toString(36).substring(2, 8);
+            return `profile_${userId}_${timestamp}_${randomSuffix}`;
         },
         transformation: [
             { width: 300, height: 300, crop: 'fill', gravity: 'face' }, // Redimensionar a 300x300 centrando en la cara

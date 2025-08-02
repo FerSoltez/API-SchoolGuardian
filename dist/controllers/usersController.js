@@ -471,80 +471,113 @@ const usersController = {
                         message: "Error al subir la nueva imagen. Inténtelo de nuevo."
                     });
                 }
-                // Guardar la URL de la imagen anterior para poder revertir si es necesario
+                // Guardar referencias importantes
                 const previousImageUrl = user.profile_image_url;
+                const newImageUrl = req.file.path;
+                let newImagePublicId = null;
+                // Extraer el public_id de la nueva imagen para poder eliminarla si falla
                 try {
-                    // Agregar la nueva URL de imagen a los datos de actualización
-                    updateData.profile_image_url = req.file.path;
-                    console.log("✅ Nueva imagen configurada:", req.file.path);
-                    // Actualizar la base de datos primero
-                    yield users_1.default.update(updateData, { where: { id_user: id } });
-                    // Solo después de una actualización exitosa, eliminar la imagen anterior
-                    if (previousImageUrl) {
+                    const urlParts = newImageUrl.split('/');
+                    const fileNameWithExtension = urlParts[urlParts.length - 1];
+                    newImagePublicId = `user-profiles/${fileNameWithExtension.split('.')[0]}`;
+                }
+                catch (extractError) {
+                    console.log("⚠️ No se pudo extraer public_id de la nueva imagen:", extractError.message);
+                }
+                try {
+                    console.log("💾 Intentando actualizar base de datos con nueva imagen:", newImageUrl);
+                    // Crear datos de actualización incluyendo la nueva imagen
+                    const imageUpdateData = Object.assign(Object.assign({}, updateData), { profile_image_url: newImageUrl });
+                    // Actualizar la base de datos
+                    const [updatedRows] = yield users_1.default.update(imageUpdateData, { where: { id_user: id } });
+                    if (updatedRows === 0) {
+                        throw new Error("No se pudo actualizar el usuario en la base de datos");
+                    }
+                    console.log("✅ Base de datos actualizada exitosamente con nueva imagen");
+                    // Solo después del éxito de la base de datos, eliminar la imagen anterior
+                    if (previousImageUrl && previousImageUrl.includes('cloudinary.com')) {
                         try {
-                            // Extraer el public_id de la URL de Cloudinary
                             const urlParts = previousImageUrl.split('/');
                             const fileNameWithExtension = urlParts[urlParts.length - 1];
-                            const publicId = `user-profiles/${fileNameWithExtension.split('.')[0]}`;
-                            console.log("🗑️ Eliminando imagen anterior de Cloudinary:", publicId);
-                            const deleteResult = yield cloudinary_1.v2.uploader.destroy(publicId);
+                            const previousPublicId = `user-profiles/${fileNameWithExtension.split('.')[0]}`;
+                            console.log("🗑️ Eliminando imagen anterior de Cloudinary:", previousPublicId);
+                            const deleteResult = yield cloudinary_1.v2.uploader.destroy(previousPublicId);
                             if (deleteResult.result === 'ok') {
                                 console.log("✅ Imagen anterior eliminada exitosamente");
                             }
                             else {
                                 console.log("⚠️ La imagen anterior no se pudo eliminar completamente:", deleteResult);
+                                // No es crítico si no se puede eliminar la imagen anterior
                             }
                         }
                         catch (deleteError) {
-                            console.log("⚠️ No se pudo eliminar la imagen anterior:", deleteError.message);
-                            // No fallar la actualización si no se puede eliminar la imagen anterior
+                            console.log("⚠️ Error al eliminar imagen anterior (no crítico):", deleteError.message);
                         }
                     }
                     // Obtener el usuario actualizado
                     const updatedUser = yield users_1.default.findByPk(id, {
                         attributes: { exclude: ['password'] }
                     });
-                    console.log("✅ Usuario actualizado exitosamente:", {
+                    console.log("✅ Usuario actualizado exitosamente con imagen:", {
                         userId: updatedUser === null || updatedUser === void 0 ? void 0 : updatedUser.id_user,
-                        hasNewImage: true,
-                        profileImageUrl: (updatedUser === null || updatedUser === void 0 ? void 0 : updatedUser.profile_image_url) || null
+                        previousImageUrl: previousImageUrl || 'ninguna',
+                        newImageUrl: updatedUser === null || updatedUser === void 0 ? void 0 : updatedUser.profile_image_url,
+                        profileUpdated: true
                     });
-                    return res.status(200).json(updatedUser);
+                    return res.status(200).json(Object.assign(Object.assign({}, updatedUser === null || updatedUser === void 0 ? void 0 : updatedUser.toJSON()), { message: "Perfil actualizado exitosamente con nueva imagen" }));
                 }
                 catch (updateError) {
-                    console.log("❌ Error al actualizar usuario con nueva imagen:", updateError.message);
-                    // Si falló la actualización de la base de datos, intentar eliminar la nueva imagen de Cloudinary
-                    try {
-                        if (req.file && req.file.path) {
-                            const urlParts = req.file.path.split('/');
-                            const fileNameWithExtension = urlParts[urlParts.length - 1];
-                            const publicId = `user-profiles/${fileNameWithExtension.split('.')[0]}`;
-                            console.log("🗑️ Revirtiendo: eliminando nueva imagen que no se pudo guardar:", publicId);
-                            yield cloudinary_1.v2.uploader.destroy(publicId);
-                            console.log("✅ Nueva imagen eliminada por rollback");
+                    console.log("❌ Error crítico al actualizar usuario con imagen:", updateError.message);
+                    // ROLLBACK: La imagen nueva ya está en Cloudinary pero la BD falló
+                    // Intentar eliminar la nueva imagen que se subió automáticamente
+                    if (newImagePublicId) {
+                        try {
+                            console.log("🔄 ROLLBACK: Eliminando nueva imagen de Cloudinary:", newImagePublicId);
+                            const rollbackResult = yield cloudinary_1.v2.uploader.destroy(newImagePublicId);
+                            if (rollbackResult.result === 'ok') {
+                                console.log("✅ Rollback exitoso: nueva imagen eliminada");
+                            }
+                            else {
+                                console.log("⚠️ Rollback parcial: nueva imagen no se pudo eliminar completamente");
+                            }
                         }
-                    }
-                    catch (rollbackError) {
-                        console.log("⚠️ No se pudo eliminar la nueva imagen durante rollback:", rollbackError.message);
+                        catch (rollbackError) {
+                            console.log("❌ Error en rollback:", rollbackError.message);
+                            // Log del problema para revisión manual
+                            console.log(`🚨 ATENCIÓN: Imagen huérfana en Cloudinary: ${newImagePublicId}`);
+                        }
                     }
                     return res.status(500).json({
                         message: "Error al actualizar el perfil con la nueva imagen",
-                        error: updateError.message
+                        error: updateError.message,
+                        details: "La imagen no se guardó. Inténtelo de nuevo."
                     });
                 }
             }
             else {
                 // No hay nueva imagen, actualización normal de otros campos
-                yield users_1.default.update(updateData, { where: { id_user: id } });
-                const updatedUser = yield users_1.default.findByPk(id, {
-                    attributes: { exclude: ['password'] }
-                });
-                console.log("✅ Usuario actualizado exitosamente (sin imagen):", {
-                    userId: updatedUser === null || updatedUser === void 0 ? void 0 : updatedUser.id_user,
-                    hasNewImage: false,
-                    profileImageUrl: (updatedUser === null || updatedUser === void 0 ? void 0 : updatedUser.profile_image_url) || null
-                });
-                res.status(200).json(updatedUser);
+                try {
+                    console.log("📝 Actualizando usuario sin cambio de imagen");
+                    const [updatedRows] = yield users_1.default.update(updateData, { where: { id_user: id } });
+                    if (updatedRows === 0) {
+                        return res.status(404).json({ message: "Usuario no encontrado o no se pudo actualizar" });
+                    }
+                    const updatedUser = yield users_1.default.findByPk(id, {
+                        attributes: { exclude: ['password'] }
+                    });
+                    console.log("✅ Usuario actualizado exitosamente (sin imagen):", {
+                        userId: updatedUser === null || updatedUser === void 0 ? void 0 : updatedUser.id_user,
+                        hasImageChange: false
+                    });
+                    res.status(200).json(updatedUser);
+                }
+                catch (normalUpdateError) {
+                    console.log("❌ Error al actualizar usuario:", normalUpdateError.message);
+                    return res.status(500).json({
+                        message: "Error al actualizar el usuario",
+                        error: normalUpdateError.message
+                    });
+                }
             }
         }
         catch (error) {
