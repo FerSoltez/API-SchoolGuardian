@@ -87,7 +87,8 @@ const classesController = {
                         if (req.file.path) {
                             const urlParts = req.file.path.split('/');
                             const fileNameWithExtension = urlParts[urlParts.length - 1];
-                            const publicId = `uploads/classes/${fileNameWithExtension.split('.')[0]}`;
+                            const fileName = fileNameWithExtension.split('.')[0];
+                            const publicId = `uploads/classes/${fileName}`;
                             yield cloudinary_1.v2.uploader.destroy(publicId);
                         }
                     }
@@ -228,7 +229,8 @@ const classesController = {
                 try {
                     const urlParts = newImageUrl.split('/');
                     const fileNameWithExtension = urlParts[urlParts.length - 1];
-                    newImagePublicId = `uploads/classes/${fileNameWithExtension.split('.')[0]}`;
+                    const fileName = fileNameWithExtension.split('.')[0];
+                    newImagePublicId = `uploads/classes/${fileName}`;
                 }
                 catch (extractError) {
                     console.log("⚠️ No se pudo extraer public_id de la nueva imagen de clase:", extractError.message);
@@ -273,7 +275,8 @@ const classesController = {
                         try {
                             const urlParts = previousImageUrl.split('/');
                             const fileNameWithExtension = urlParts[urlParts.length - 1];
-                            const previousPublicId = `uploads/classes/${fileNameWithExtension.split('.')[0]}`;
+                            const fileName = fileNameWithExtension.split('.')[0];
+                            const previousPublicId = `uploads/classes/${fileName}`;
                             console.log("🗑️ Eliminando imagen anterior de clase de Cloudinary:", previousPublicId);
                             const deleteResult = yield cloudinary_1.v2.uploader.destroy(previousPublicId);
                             if (deleteResult.result === 'ok') {
@@ -295,7 +298,8 @@ const classesController = {
                         try {
                             const urlParts = req.file.path.split('/');
                             const fileNameWithExtension = urlParts[urlParts.length - 1];
-                            const rollbackPublicId = `uploads/classes/${fileNameWithExtension.split('.')[0]}`;
+                            const fileName = fileNameWithExtension.split('.')[0];
+                            const rollbackPublicId = `uploads/classes/${fileName}`;
                             console.log("🔄 ROLLBACK: Eliminando nueva imagen de clase de Cloudinary:", rollbackPublicId);
                             yield cloudinary_1.v2.uploader.destroy(rollbackPublicId);
                             console.log("✅ Rollback exitoso: nueva imagen de clase eliminada");

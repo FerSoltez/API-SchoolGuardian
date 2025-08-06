@@ -11,27 +11,36 @@ cloudinary.config({
 
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
-    params: {
-        folder: 'uploads', // Carpeta general que contendrá subcarpetas
-        format: async (req: Request, file: Express.Multer.File) => 'png',
-        public_id: (req: Request, file: Express.Multer.File) => {
-            // Usar ID único con timestamp para evitar sobrescritura automática
-            const entityId = req.body.user_id || req.params.id || 'unknown';
-            const timestamp = Date.now();
-            const randomSuffix = Math.random().toString(36).substring(2, 8);
-            
-            if (file.fieldname === 'class_image') {
-                return `classes/class_${entityId}_${timestamp}_${randomSuffix}`;
-            } else if (file.fieldname === 'profile_image') {
-                return `users/profile_${entityId}_${timestamp}_${randomSuffix}`;
-            } else {
-                return `general/upload_${entityId}_${timestamp}_${randomSuffix}`;
-            }
-        },
-        transformation: [
-            { width: 300, height: 300, crop: 'fill', gravity: 'center' }, // Redimensionar a 300x300 centrando la imagen
-            { quality: 'auto' } // Optimización automática de calidad
-        ]
+    params: (req: Request, file: Express.Multer.File) => {
+        // Determinar carpeta basada en el tipo de imagen
+        let folder = 'uploads/general';
+        if (file.fieldname === 'class_image') {
+            folder = 'uploads/classes';
+        } else if (file.fieldname === 'profile_image') {
+            folder = 'uploads/users';
+        }
+
+        // Usar ID único con timestamp para evitar sobrescritura automática
+        const entityId = req.body.user_id || req.params.id || 'unknown';
+        const timestamp = Date.now();
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        
+        let publicId = `upload_${entityId}_${timestamp}_${randomSuffix}`;
+        if (file.fieldname === 'class_image') {
+            publicId = `class_${entityId}_${timestamp}_${randomSuffix}`;
+        } else if (file.fieldname === 'profile_image') {
+            publicId = `profile_${entityId}_${timestamp}_${randomSuffix}`;
+        }
+
+        return {
+            folder: folder,
+            format: 'png',
+            public_id: publicId,
+            transformation: [
+                { width: 300, height: 300, crop: 'fill', gravity: 'center' }, // Redimensionar a 300x300 centrando la imagen
+                { quality: 'auto' } // Optimización automática de calidad
+            ]
+        };
     },
 });
 

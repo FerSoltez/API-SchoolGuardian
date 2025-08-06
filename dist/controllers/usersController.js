@@ -479,7 +479,8 @@ const usersController = {
                 try {
                     const urlParts = newImageUrl.split('/');
                     const fileNameWithExtension = urlParts[urlParts.length - 1];
-                    newImagePublicId = `uploads/users/${fileNameWithExtension.split('.')[0]}`;
+                    const fileName = fileNameWithExtension.split('.')[0];
+                    newImagePublicId = `uploads/users/${fileName}`;
                 }
                 catch (extractError) {
                     console.log("⚠️ No se pudo extraer public_id de la nueva imagen:", extractError.message);
@@ -499,7 +500,8 @@ const usersController = {
                         try {
                             const urlParts = previousImageUrl.split('/');
                             const fileNameWithExtension = urlParts[urlParts.length - 1];
-                            const previousPublicId = `uploads/users/${fileNameWithExtension.split('.')[0]}`;
+                            const fileName = fileNameWithExtension.split('.')[0];
+                            const previousPublicId = `uploads/users/${fileName}`;
                             console.log("🗑️ Eliminando imagen anterior de Cloudinary:", previousPublicId);
                             const deleteResult = yield cloudinary_1.v2.uploader.destroy(previousPublicId);
                             if (deleteResult.result === 'ok') {
