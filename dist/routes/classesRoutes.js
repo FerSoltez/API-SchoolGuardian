@@ -16,5 +16,5 @@ router.post("/classes/detalle", authMiddleware_1.default, classesController_1.de
 router.post("/classes/codigo", authMiddleware_1.default, classesController_1.default.getClassByCode);
 router.delete("/classes/:id", authMiddleware_1.default, (0, roleMiddleware_1.roleMiddleware)(["Administrator"]), classesController_1.default.deleteClass);
 router.patch("/classes/:id", authMiddleware_1.default, (0, roleMiddleware_1.roleMiddleware)(["Administrator"]), cloudinaryConfig_1.default.single('class_image'), classesController_1.default.partialUpdateClass); // Con imagen
-router.post("/classes/usuario", authMiddleware_1.default, (0, roleMiddleware_1.roleMiddleware)(["Professor"]), classesController_1.default.getClassesByUserId);
+router.post("/classes/usuario", authMiddleware_1.default, (0, roleMiddleware_1.roleMiddleware)(["Professor", "Student"]), classesController_1.default.getClassesByUserId);
 exports.default = router;

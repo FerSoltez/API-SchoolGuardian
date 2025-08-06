@@ -13,6 +13,6 @@ router.post("/classes/detalle", authMiddleware, classesController.getClass as an
 router.post("/classes/codigo", authMiddleware, classesController.getClassByCode as any);
 router.delete("/classes/:id", authMiddleware, roleMiddleware(["Administrator"]), classesController.deleteClass as any);
 router.patch("/classes/:id", authMiddleware, roleMiddleware(["Administrator"]), upload.single('class_image'), classesController.partialUpdateClass as any); // Con imagen
-router.post("/classes/usuario", authMiddleware, roleMiddleware(["Professor"]), classesController.getClassesByUserId as any);
+router.post("/classes/usuario", authMiddleware, roleMiddleware(["Professor", "Student"]), classesController.getClassesByUserId as any);
 
 export default router;

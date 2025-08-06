@@ -417,6 +417,7 @@ const classesController = {
         return res.status(401).json({ message: "Usuario no autenticado" });
       }
       const userId = (req.user as jwt.JwtPayload).id; // ID del usuario autenticado extraído del token
+      const userRole = (req.user as jwt.JwtPayload).role; // Rol del usuario autenticado
       const { id } = req.body;
 
       // Verificar si el usuario autenticado está intentando acceder a sus propias clases
@@ -424,16 +425,41 @@ const classesController = {
         return res.status(403).json({ message: "Acceso denegado. No puedes ver las clases de otro usuario." });
       }
 
-      // Obtener las clases del profesor con los horarios
-      const classes = await Classes.findAll({
-        where: { id_professor: id },
-        include: [
-          {
-            model: Schedules,
-            attributes: ["id_schedule", "id_device", "weekday", "start_time", "end_time"],
-          },
-        ],
-      });
+      let classes: any[] = [];
+
+      if (userRole === 'Professor') {
+        // Si es profesor, obtener las clases que enseña
+        classes = await Classes.findAll({
+          where: { id_professor: id },
+          include: [
+            {
+              model: Schedules,
+              attributes: ["id_schedule", "id_device", "weekday", "start_time", "end_time"],
+            },
+          ],
+        });
+      } else if (userRole === 'Student') {
+        // Si es estudiante, obtener las clases en las que está inscrito
+        const enrollments = await Enrollments.findAll({
+          where: { id_student: id },
+          include: [
+            {
+              model: Classes,
+              include: [
+                {
+                  model: Schedules,
+                  attributes: ["id_schedule", "id_device", "weekday", "start_time", "end_time"],
+                },
+              ],
+            },
+          ],
+        });
+
+        // Extraer las clases de las inscripciones
+        classes = enrollments.map((enrollment: any) => enrollment.Class).filter(Boolean);
+      } else {
+        return res.status(403).json({ message: "Rol no autorizado para ver clases." });
+      }
 
       // Agregar la cantidad de alumnos inscritos a cada clase y formatear horarios
       const classesWithDetails = await Promise.all(
@@ -475,16 +501,34 @@ const classesController = {
           // Remover el array original de Schedules y agregar el formateado
           delete (classJSON as any).Schedules;
 
-          return {
+          const result = {
             ...classJSON,
             studentCount,
             schedules: formattedSchedules,
             total_schedules: formattedSchedules.length
           };
+
+          // Agregar información específica según el rol
+          if (userRole === 'Student') {
+            // Para estudiantes, agregar información de si están inscritos (siempre true en este caso)
+            result.is_enrolled = true;
+            result.view_type = 'student';
+          } else if (userRole === 'Professor') {
+            // Para profesores, agregar información de que son el propietario
+            result.is_owner = true;
+            result.view_type = 'professor';
+          }
+
+          return result;
         })
       );
 
-      res.status(200).json(classesWithDetails);
+      res.status(200).json({
+        user_role: userRole,
+        user_id: userId,
+        classes: classesWithDetails,
+        total_classes: classesWithDetails.length
+      });
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
     }
