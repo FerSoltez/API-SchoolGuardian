@@ -40,7 +40,7 @@ router.post("/attendance/student", authMiddleware, attendanceController.getAtten
 // Obtener asistencias por clase (Solo profesores y administradores)
 router.post("/attendance/class", authMiddleware, roleMiddleware(["Professor", "Administrator"]), attendanceController.getAttendancesByClass as any);
 
-// Obtener asistencias por fecha (Solo profesores y administradores)
+// Obtener asistencias por fecha (Solo profesores y administradores) - Filtros opcionales: id_class, id_professor
 router.post("/attendance/date", authMiddleware, roleMiddleware(["Professor", "Administrator"]), attendanceController.getAttendancesByDate as any);
 
 // Obtener estadísticas de asistencia (Solo profesores y administradores, estudiantes ven solo las suyas)

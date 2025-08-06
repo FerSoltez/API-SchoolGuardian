@@ -31,7 +31,7 @@ router.delete("/attendance/:id", authMiddleware_1.default, (0, roleMiddleware_1.
 router.post("/attendance/student", authMiddleware_1.default, attendanceController_1.default.getAttendancesByStudent);
 // Obtener asistencias por clase (Solo profesores y administradores)
 router.post("/attendance/class", authMiddleware_1.default, (0, roleMiddleware_1.roleMiddleware)(["Professor", "Administrator"]), attendanceController_1.default.getAttendancesByClass);
-// Obtener asistencias por fecha (Solo profesores y administradores)
+// Obtener asistencias por fecha (Solo profesores y administradores) - Filtros opcionales: id_class, id_professor
 router.post("/attendance/date", authMiddleware_1.default, (0, roleMiddleware_1.roleMiddleware)(["Professor", "Administrator"]), attendanceController_1.default.getAttendancesByDate);
 // Obtener estadísticas de asistencia (Solo profesores y administradores, estudiantes ven solo las suyas)
 router.post("/attendance/stats", authMiddleware_1.default, attendanceController_1.default.getAttendanceStats);

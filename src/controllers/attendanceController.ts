@@ -829,14 +829,55 @@ const attendanceController = {
   // Obtener asistencias por fecha
   getAttendancesByDate: async (req: Request, res: Response) => {
     try {
-      const { date } = req.body;
+      if (!req.user) {
+        return res.status(401).json({ message: "Usuario no autenticado" });
+      }
+
+      const user = req.user as { id: number; role: string };
+      const { date, id_class, id_professor } = req.body;
 
       if (!date) {
         return res.status(400).json({ message: "Fecha es requerida" });
       }
 
+      // Construir condiciones de filtro
+      const whereConditions: any = {
+        attendance_date: new Date(date)
+      };
+
+      // Filtro por clase específica
+      if (id_class) {
+        whereConditions.id_class = id_class;
+      }
+
+      // Si se especifica un profesor, filtrar por clases de ese profesor
+      let classFilter: any = {};
+      if (id_professor) {
+        classFilter.id_professor = id_professor;
+      }
+
+      // Si es un profesor (no admin), solo puede ver asistencias de sus propias clases
+      if (user.role === 'Professor' && !id_professor) {
+        classFilter.id_professor = user.id;
+      }
+
+      // Validar que la clase existe (si se especifica)
+      if (id_class) {
+        const classExists = await ClassesModel.findByPk(id_class);
+        if (!classExists) {
+          return res.status(404).json({ message: "Clase no encontrada" });
+        }
+
+        // Verificar que el profesor tiene acceso a esta clase
+        if (user.role === 'Professor' && classExists.id_professor !== user.id) {
+          return res.status(403).json({ 
+            message: "Acceso denegado. No puedes ver asistencias de clases que no te pertenecen." 
+          });
+        }
+      }
+
       const attendances = await AttendanceModel.findAll({
-        where: { attendance_date: new Date(date) },
+        where: whereConditions,
         include: [
           {
             model: UsersModel,
@@ -844,17 +885,38 @@ const attendanceController = {
           },
           {
             model: ClassesModel,
-            attributes: ['id_class', 'name', 'class_code', 'group_name']
+            attributes: ['id_class', 'name', 'class_code', 'group_name', 'id_professor'],
+            where: Object.keys(classFilter).length > 0 ? classFilter : undefined
           }
         ],
         order: [['attendance_time', 'ASC']]
       });
 
-      res.status(200).json({
+      // Información adicional para la respuesta
+      const responseData: any = {
         date: date,
         total_attendances: attendances.length,
         attendances: attendances
-      });
+      };
+
+      // Agregar información de filtros aplicados
+      const filters: any = { date: date };
+      if (id_class) filters.class_id = id_class;
+      if (id_professor || user.role === 'Professor') {
+        filters.professor_id = id_professor || user.id;
+      }
+      responseData.filters = filters;
+
+      // Estadísticas por estado
+      const statusStats = {
+        Present: attendances.filter(a => a.status === 'Present').length,
+        Absent: attendances.filter(a => a.status === 'Absent').length,
+        Late: attendances.filter(a => a.status === 'Late').length,
+        Justified: attendances.filter(a => a.status === 'Justified').length
+      };
+      responseData.status_statistics = statusStats;
+
+      res.status(200).json(responseData);
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
     }
