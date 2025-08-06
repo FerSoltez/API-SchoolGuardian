@@ -7,6 +7,7 @@ interface ClassesAttributes {
   name: string;
   group_name: string;
   class_code: string;
+  class_image_url?: string;
 }
 
 interface ClassesCreationAttributes extends Optional<ClassesAttributes, "id_class"> {}
@@ -17,6 +18,7 @@ class ClassesModel extends Model<ClassesAttributes, ClassesCreationAttributes> i
   public name!: string;
   public group_name!: string;
   public class_code!: string;
+  public class_image_url?: string;
 }
 
 ClassesModel.init(
@@ -42,6 +44,10 @@ ClassesModel.init(
       type: DataTypes.STRING(50),
       allowNull: false,
       unique: true,
+    },
+    class_image_url: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
     },
   },
   {

@@ -27,6 +27,10 @@ ClassesModel.init({
         allowNull: false,
         unique: true,
     },
+    class_image_url: {
+        type: sequelize_1.DataTypes.STRING(500),
+        allowNull: true,
+    },
 }, {
     sequelize: database_1.sequelize,
     modelName: "Classes",

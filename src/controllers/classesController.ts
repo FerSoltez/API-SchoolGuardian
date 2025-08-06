@@ -3,6 +3,7 @@ import Classes from "../models/classes";
 import Schedules from "../models/schedules";
 import jwt from "jsonwebtoken";
 import Enrollments from "../models/enrollments";
+import { v2 as cloudinary } from 'cloudinary';
 
 // Import associations to establish relationships
 import "../models/associations";
@@ -59,13 +60,49 @@ const classesController = {
       // Generar un código aleatorio de 6 dígitos
       const class_code = Math.random().toString(36).substring(2, 8).toUpperCase();
 
-      // Crear la clase
-      const newClass = await Classes.create({ 
+      // Preparar datos de la clase
+      const classData: any = { 
         name, 
         group_name, 
         id_professor, 
         class_code 
-      });
+      };
+
+      // Manejar imagen de la clase si se proporciona
+      if (req.file && req.file.path) {
+        console.log("🖼️ Imagen de clase detectada:", {
+          fileName: req.file.filename,
+          path: req.file.path,
+          size: req.file.size
+        });
+
+        // Verificar que la imagen se subió correctamente a Cloudinary
+        if (!req.file.path || !req.file.path.includes('cloudinary.com')) {
+          console.log("❌ Error: La imagen de clase no se subió correctamente a Cloudinary");
+          
+          // Intentar limpiar la imagen si falló
+          try {
+            if (req.file.path) {
+              const urlParts = req.file.path.split('/');
+              const fileNameWithExtension = urlParts[urlParts.length - 1];
+              const publicId = `uploads/classes/${fileNameWithExtension.split('.')[0]}`;
+              await cloudinary.uploader.destroy(publicId);
+            }
+          } catch (cleanupError) {
+            console.log("⚠️ No se pudo limpiar imagen fallida:", (cleanupError as Error).message);
+          }
+          
+          return res.status(500).json({ 
+            message: "Error al subir la imagen de la clase. Inténtelo de nuevo." 
+          });
+        }
+
+        classData.class_image_url = req.file.path;
+        console.log("✅ Imagen de clase configurada:", req.file.path);
+      }
+
+      // Crear la clase
+      const newClass = await Classes.create(classData);
 
       // Crear los horarios asociados
       const schedulesData = schedules.map((schedule: any) => ({
@@ -180,55 +217,192 @@ const classesController = {
       }
 
       const { schedules, ...classUpdateData } = req.body;
+      let imageUpdateSuccessful = false;
+      let previousImageUrl = classData.class_image_url;
 
-      // Actualizar los datos de la clase (nombre, grupo, etc.)
-      if (Object.keys(classUpdateData).length > 0) {
-        await Classes.update(classUpdateData, { where: { id_class: id } });
-      }
+      // PASO 1: Manejar actualización de imagen si se proporciona
+      if (req.file && req.file.path) {
+        console.log("🖼️ Nueva imagen de clase detectada:", {
+          fileName: req.file.filename,
+          path: req.file.path,
+          size: req.file.size
+        });
 
-      // Si se proporcionan nuevos horarios, actualizarlos
-      if (schedules && Array.isArray(schedules)) {
-        // Validar cada horario
-        for (const schedule of schedules) {
-          if (!schedule.id_device || !schedule.weekday || !schedule.start_time || !schedule.end_time) {
-            return res.status(400).json({ 
-              message: "Cada horario debe incluir: id_device, weekday, start_time, end_time." 
-            });
-          }
-          
-          const validWeekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-          if (!validWeekdays.includes(schedule.weekday)) {
-            return res.status(400).json({ 
-              message: `Día de la semana inválido: ${schedule.weekday}` 
-            });
-          }
+        // Verificar que la nueva imagen se subió correctamente a Cloudinary
+        if (!req.file.path || !req.file.path.includes('cloudinary.com')) {
+          console.log("❌ Error: La nueva imagen de clase no se subió correctamente a Cloudinary");
+          return res.status(500).json({ 
+            message: "Error al subir la nueva imagen de la clase. Inténtelo de nuevo." 
+          });
         }
 
-        // Eliminar horarios existentes
-        await Schedules.destroy({ where: { id_class: id } });
-
-        // Crear los nuevos horarios
-        const schedulesData = schedules.map((schedule: any) => ({
-          id_class: Number(id),
-          id_device: schedule.id_device,
-          weekday: schedule.weekday,
-          start_time: schedule.start_time,
-          end_time: schedule.end_time
-        }));
-
-        await Schedules.bulkCreate(schedulesData);
+        const newImageUrl = req.file.path;
+        let newImagePublicId = null;
+        
+        // Extraer el public_id de la nueva imagen para rollback si es necesario
+        try {
+          const urlParts = newImageUrl.split('/');
+          const fileNameWithExtension = urlParts[urlParts.length - 1];
+          newImagePublicId = `uploads/classes/${fileNameWithExtension.split('.')[0]}`;
+        } catch (extractError) {
+          console.log("⚠️ No se pudo extraer public_id de la nueva imagen de clase:", (extractError as Error).message);
+        }
+        
+        try {
+          console.log("💾 Actualizando imagen de clase en base de datos:", newImageUrl);
+          
+          // Agregar la nueva URL de imagen a los datos de actualización
+          classUpdateData.class_image_url = newImageUrl;
+          imageUpdateSuccessful = true;
+          
+        } catch (imageError) {
+          console.log("❌ Error al preparar actualización de imagen:", (imageError as Error).message);
+          
+          // Rollback: eliminar la nueva imagen de Cloudinary
+          if (newImagePublicId) {
+            try {
+              console.log("🔄 ROLLBACK: Eliminando nueva imagen de clase de Cloudinary:", newImagePublicId);
+              await cloudinary.uploader.destroy(newImagePublicId);
+              console.log("✅ Rollback exitoso: nueva imagen de clase eliminada");
+            } catch (rollbackError) {
+              console.log("❌ Error en rollback de imagen de clase:", (rollbackError as Error).message);
+              console.log(`🚨 ATENCIÓN: Imagen de clase huérfana en Cloudinary: ${newImagePublicId}`);
+            }
+          }
+          
+          return res.status(500).json({ 
+            message: "Error al procesar la nueva imagen de la clase",
+            error: (imageError as Error).message
+          });
+        }
       }
 
-      // Obtener la clase actualizada con los horarios asociados
+      // PASO 2: Actualizar datos de la clase (incluyendo imagen si hay una nueva)
+      if (Object.keys(classUpdateData).length > 0) {
+        try {
+          console.log("💾 Actualizando datos de clase:", Object.keys(classUpdateData));
+          
+          const [updatedRows] = await Classes.update(classUpdateData, { where: { id_class: id } });
+          
+          if (updatedRows === 0) {
+            throw new Error("No se pudo actualizar la clase en la base de datos");
+          }
+          
+          console.log("✅ Datos de clase actualizados exitosamente");
+
+          // Si se actualizó la imagen exitosamente, eliminar la imagen anterior
+          if (imageUpdateSuccessful && previousImageUrl && previousImageUrl.includes('cloudinary.com')) {
+            try {
+              const urlParts = previousImageUrl.split('/');
+              const fileNameWithExtension = urlParts[urlParts.length - 1];
+              const previousPublicId = `uploads/classes/${fileNameWithExtension.split('.')[0]}`;
+              
+              console.log("🗑️ Eliminando imagen anterior de clase de Cloudinary:", previousPublicId);
+              const deleteResult = await cloudinary.uploader.destroy(previousPublicId);
+              
+              if (deleteResult.result === 'ok') {
+                console.log("✅ Imagen anterior de clase eliminada exitosamente");
+              } else {
+                console.log("⚠️ La imagen anterior de clase no se pudo eliminar completamente:", deleteResult);
+              }
+            } catch (deleteError) {
+              console.log("⚠️ Error al eliminar imagen anterior de clase (no crítico):", (deleteError as Error).message);
+            }
+          }
+
+        } catch (updateError) {
+          console.log("❌ Error crítico al actualizar datos de clase:", (updateError as Error).message);
+          
+          // Si había una nueva imagen, hacer rollback
+          if (imageUpdateSuccessful && req.file && req.file.path) {
+            try {
+              const urlParts = req.file.path.split('/');
+              const fileNameWithExtension = urlParts[urlParts.length - 1];
+              const rollbackPublicId = `uploads/classes/${fileNameWithExtension.split('.')[0]}`;
+              
+              console.log("🔄 ROLLBACK: Eliminando nueva imagen de clase de Cloudinary:", rollbackPublicId);
+              await cloudinary.uploader.destroy(rollbackPublicId);
+              console.log("✅ Rollback exitoso: nueva imagen de clase eliminada");
+            } catch (rollbackError) {
+              console.log("❌ Error en rollback de imagen de clase:", (rollbackError as Error).message);
+            }
+          }
+          
+          return res.status(500).json({ 
+            message: "Error al actualizar los datos de la clase",
+            error: (updateError as Error).message
+          });
+        }
+      }
+
+      // PASO 3: Actualizar horarios si se proporcionan
+      if (schedules && Array.isArray(schedules)) {
+        try {
+          console.log("📅 Actualizando horarios de clase");
+          
+          // Validar cada horario
+          for (const schedule of schedules) {
+            if (!schedule.id_device || !schedule.weekday || !schedule.start_time || !schedule.end_time) {
+              return res.status(400).json({ 
+                message: "Cada horario debe incluir: id_device, weekday, start_time, end_time." 
+              });
+            }
+            
+            const validWeekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            if (!validWeekdays.includes(schedule.weekday)) {
+              return res.status(400).json({ 
+                message: `Día de la semana inválido: ${schedule.weekday}` 
+              });
+            }
+          }
+
+          // Eliminar horarios existentes
+          await Schedules.destroy({ where: { id_class: id } });
+
+          // Crear los nuevos horarios
+          const schedulesData = schedules.map((schedule: any) => ({
+            id_class: Number(id),
+            id_device: schedule.id_device,
+            weekday: schedule.weekday,
+            start_time: schedule.start_time,
+            end_time: schedule.end_time
+          }));
+
+          await Schedules.bulkCreate(schedulesData);
+          console.log("✅ Horarios actualizados exitosamente");
+          
+        } catch (schedulesError) {
+          console.log("❌ Error al actualizar horarios:", (schedulesError as Error).message);
+          return res.status(500).json({ 
+            message: "Error al actualizar los horarios de la clase",
+            error: (schedulesError as Error).message
+          });
+        }
+      }
+
+      // PASO 4: Obtener y devolver la clase actualizada
       const updatedClass = await Classes.findByPk(id, {
         include: [{ model: Schedules }],
       });
 
+      console.log("✅ Clase actualizada completamente:", {
+        classId: updatedClass?.id_class,
+        hasNewImage: imageUpdateSuccessful,
+        imageUrl: updatedClass?.class_image_url || null,
+        schedulesCount: (updatedClass as any)?.schedules?.length || 0
+      });
+
       res.status(200).json({
         message: "Clase actualizada exitosamente",
-        class: updatedClass
+        class: updatedClass,
+        updates: {
+          data_updated: Object.keys(classUpdateData).length > 0,
+          image_updated: imageUpdateSuccessful,
+          schedules_updated: schedules && Array.isArray(schedules)
+        }
       });
     } catch (error) {
+      console.log("❌ Error general en partialUpdateClass:", (error as Error).message);
       res.status(500).json({ error: (error as Error).message });
     }
   },
