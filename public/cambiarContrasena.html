@@ -404,12 +404,12 @@
         messageDiv.textContent = 'Procesando solicitud...';
         messageDiv.className = 'message';
         
-        const response = await fetch('https://assists-api.onrender.com/api/usuarios/cambiarContrasena', {
+        const response = await fetch('/api/users/changePass', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ token, nuevaContrasena }),
+          body: JSON.stringify({ token, newPassword: nuevaContrasena }),
         });
 
         const data = await response.json();
