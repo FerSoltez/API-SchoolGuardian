@@ -355,7 +355,7 @@
         messageDiv.textContent = 'Procesando solicitud...';
         messageDiv.className = 'message';
         
-        const response = await fetch('https://assists-api.onrender.com/api/usuarios/enviarCorreoCambioContrasena', {
+        const response = await fetch('/api/users/emailChangePass', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
