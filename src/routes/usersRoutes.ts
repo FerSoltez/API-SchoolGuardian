@@ -22,6 +22,10 @@ router.delete("/users/:id", authMiddleware, usersController.deleteUser as any);
 router.post("/users/changePass", usersController.changePassword as any);
 router.post("/users/emailChangePass", usersController.sendPasswordResetEmail as any);
 
+// UUID management routes
+router.post("/users/requestUuidReset", usersController.sendUuidResetEmail as any);
+router.post("/users/resetUuid", usersController.resetUserUuid as any);
+
 // Profile image routes
 router.get("/users/:id/profile-image", usersController.getProfileImage as any);
 router.delete("/users/:id/profile-image", authMiddleware, usersController.deleteProfileImage as any);

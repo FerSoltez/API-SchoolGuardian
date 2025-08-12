@@ -21,6 +21,7 @@ const classes_1 = __importDefault(require("../models/classes"));
 const enrollments_1 = __importDefault(require("../models/enrollments"));
 const schedules_1 = __importDefault(require("../models/schedules"));
 const emailTransporter_1 = __importDefault(require("../utils/emailTransporter"));
+const uuid_1 = require("uuid");
 const cloudinary_1 = require("cloudinary");
 // Import associations to establish relationships
 require("../models/associations");
@@ -260,9 +261,13 @@ const usersController = {
                         message: "UUID es requerido para estudiantes"
                     });
                 }
-                if (user.user_uuid !== user_uuid) {
+                // Si el usuario tiene UUID en la BD, debe coincidir
+                // Si el usuario NO tiene UUID (reset), se generará uno nuevo más adelante
+                if (user.user_uuid && user.user_uuid !== user_uuid) {
                     return res.status(403).json({ message: "UUID de usuario inválido" });
                 }
+                // Si el usuario no tiene UUID en la BD pero envía uno, es válido
+                // Se regenerará después de la autenticación exitosa
             }
             // Verificar si la cuenta está verificada
             if (!user.verification) {
@@ -299,6 +304,14 @@ const usersController = {
             }
             // Restablecer intentos en caso de inicio de sesión exitoso
             yield users_1.default.update({ attempts: 3 }, { where: { id_user: user.id_user } });
+            // Verificar y regenerar UUID si es null (para casos de reset exitoso)
+            let userUuid = user.user_uuid;
+            if (!userUuid) {
+                userUuid = (0, uuid_1.v4)();
+                yield users_1.default.update({ user_uuid: userUuid }, { where: { id_user: user.id_user } });
+                console.log(`🔄 UUID regenerado para usuario ${user.id_user}: ${userUuid}`);
+                console.log(`📱 Login desde app móvil - UUID anterior: ${user_uuid || 'N/A'}`);
+            }
             const token = jsonwebtoken_1.default.sign({ id: user.id_user, role: user.role }, process.env.JWT_SECRET || 'secret_key', { expiresIn: "1h" });
             console.log("🔑 Login exitoso - Token generado:", {
                 userId: user.id_user,
@@ -314,6 +327,7 @@ const usersController = {
                     email: user.email,
                     name: user.name,
                     role: user.role,
+                    user_uuid: userUuid,
                     profile_image_url: user.profile_image_url || null
                 }
             });
@@ -656,7 +670,7 @@ const usersController = {
               <p style="margin-bottom: 20px;">Hemos recibido una solicitud para cambiar tu contraseña. Para continuar con este proceso, haz clic en el siguiente botón:</p>
               
               <div style="text-align: center; margin: 25px 0;">
-                <a href="https://tu-dominio.com/cambiarContrasena.html?token=${token}" style="display: inline-block; background-color: #1a1a1a; color: white; text-decoration: none; padding: 12px 30px; border-radius: 5px; font-weight: 500;">Cambiar Contraseña</a>
+                <a href="https://api-schoolguardian.onrender.com/cambiarContrasena.html?token=${token}" style="display: inline-block; background-color: #1a1a1a; color: white; text-decoration: none; padding: 12px 30px; border-radius: 5px; font-weight: 500;">Cambiar Contraseña</a>
               </div>
               
               <div style="margin-top: 25px; padding: 15px; background-color: #f9f9f9; border-radius: 5px; font-size: 14px;">
@@ -675,6 +689,146 @@ const usersController = {
             res.status(200).json({ message: "Correo enviado exitosamente." });
         }
         catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    }),
+    // Endpoint para solicitar reset de UUID por correo
+    sendUuidResetEmail: (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+        try {
+            const { email } = req.body;
+            if (!email) {
+                return res.status(400).json({ message: "El correo electrónico es requerido." });
+            }
+            const user = yield users_1.default.findOne({ where: { email } });
+            if (!user) {
+                return res.status(404).json({ message: "Usuario no encontrado." });
+            }
+            // Verificar que han pasado al menos 4 meses desde el último cambio de UUID
+            const fourMonthsAgo = new Date();
+            fourMonthsAgo.setMonth(fourMonthsAgo.getMonth() - 4);
+            if (user.last_uuid_change && new Date(user.last_uuid_change) > fourMonthsAgo) {
+                const nextAvailableDate = new Date(user.last_uuid_change);
+                nextAvailableDate.setMonth(nextAvailableDate.getMonth() + 4);
+                return res.status(429).json({
+                    message: "El cambio de UUID solo está disponible cada 4 meses.",
+                    nextAvailableDate: nextAvailableDate.toLocaleDateString('es-ES', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                    })
+                });
+            }
+            // Crear token específico para reset de UUID
+            const token = jsonwebtoken_1.default.sign({
+                email,
+                action: 'uuid_reset',
+                user_id: user.id_user
+            }, process.env.JWT_SECRET || 'secret_key', { expiresIn: '24h' });
+            const mailOptions = {
+                from: '"Soporte SchoolGuardian" <tu_correo@gmail.com>',
+                to: email,
+                subject: "Solicitud de Cambio de UUID - SchoolGuardian",
+                html: `
+          <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);">
+            <div style="background-color: #1a1a1a; color: white; padding: 20px; text-align: center;">
+              <h1 style="margin: 0; font-size: 24px; color: white;">SCHOOL GUARDIAN</h1>
+            </div>
+            
+            <div style="padding: 30px; line-height: 1.6;">
+              <div style="font-size: 24px; font-weight: 600; margin-bottom: 20px; text-align: center; color: #333;">Cambio de Identificador de Usuario</div>
+              
+              <p style="margin-bottom: 15px;">Hola, ${user.name},</p>
+              
+              <p style="margin-bottom: 20px;">Hemos recibido una solicitud para cambiar tu identificador único de usuario (UUID). Esta acción:</p>
+              
+              <ul style="margin: 15px 0; padding-left: 20px;">
+                <li>Eliminará tu UUID actual</li>
+                <li>Generará uno nuevo en tu próximo inicio de sesión</li>
+                <li>No afectará tu acceso a las clases</li>
+                <li>Es reversible contactando al administrador</li>
+              </ul>
+              
+              <p style="margin-bottom: 20px;"><strong>⚠️ Importante:</strong> Solo procede si realmente solicitaste este cambio.</p>
+              
+              <div style="text-align: center; margin: 25px 0;">
+                <a href="https://api-schoolguardian.onrender.com/resetearUuid.html?token=${token}" style="display: inline-block; background-color: #dc3545; color: white; text-decoration: none; padding: 12px 30px; border-radius: 5px; font-weight: 500;">Confirmar Cambio de UUID</a>
+              </div>
+              
+              <div style="margin-top: 25px; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 5px; font-size: 14px;">
+                <p style="margin-top: 0; color: #856404;"><strong>¿Por qué cambiar el UUID?</strong></p>
+                <p style="margin-bottom: 0; color: #856404;">Los UUIDs se pueden cambiar por razones de seguridad, migración de dispositivos, o para resolver conflictos técnicos.</p>
+              </div>
+              
+              <div style="margin-top: 15px; padding: 15px; background-color: #f9f9f9; border-radius: 5px; font-size: 14px;">
+                <p style="margin-top: 0;">Si no solicitaste este cambio, puedes ignorar este correo. Tu cuenta seguirá segura.</p>
+                <p style="margin-bottom: 0;">Por razones de seguridad, este enlace expirará en 24 horas.</p>
+              </div>
+            </div>
+            
+            <div style="background-color: #f5f5f5; padding: 15px; text-align: center; font-size: 14px; color: #666;">
+              <p style="margin: 0;">&copy; 2025 SchoolGuardian. Todos los derechos reservados.</p>
+            </div>
+          </div>
+        `,
+            };
+            yield emailTransporter_1.default.sendMail(mailOptions);
+            res.status(200).json({
+                message: "Correo de confirmación enviado exitosamente.",
+                info: "Revisa tu bandeja de entrada y sigue las instrucciones para confirmar el cambio de UUID."
+            });
+        }
+        catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    }),
+    // Endpoint para resetear UUID con token de validación
+    resetUserUuid: (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+        try {
+            const { token } = req.body;
+            if (!token) {
+                return res.status(400).json({ message: "Token de confirmación es requerido." });
+            }
+            // Verificar y decodificar el token
+            let decodedToken;
+            try {
+                decodedToken = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET || 'secret_key');
+            }
+            catch (error) {
+                return res.status(400).json({ message: "Token inválido o expirado." });
+            }
+            // Verificar que el token sea específico para reset de UUID
+            if (decodedToken.action !== 'uuid_reset') {
+                return res.status(400).json({ message: "Token no válido para esta operación." });
+            }
+            const { email, user_id } = decodedToken;
+            // Buscar al usuario
+            const user = yield users_1.default.findOne({ where: { email, id_user: user_id } });
+            if (!user) {
+                return res.status(404).json({ message: "Usuario no encontrado." });
+            }
+            // Guardar UUID anterior para logs (opcional)
+            const previousUuid = user.user_uuid;
+            // Resetear UUID y registrar fecha del cambio
+            yield users_1.default.update({
+                user_uuid: '',
+                last_uuid_change: new Date()
+            }, { where: { id_user: user_id } });
+            console.log(`🔄 UUID Reset - Usuario: ${user.name} (${email})`);
+            console.log(`   UUID anterior: ${previousUuid || 'null'}`);
+            console.log(`   UUID nuevo: Se generará en próximo login`);
+            console.log(`   Fecha: ${new Date().toISOString()}`);
+            res.status(200).json({
+                message: "UUID reseteado exitosamente.",
+                info: "Se generará un nuevo UUID en tu próximo inicio de sesión.",
+                user: {
+                    name: user.name,
+                    email: user.email,
+                    uuid_reset: true
+                }
+            });
+        }
+        catch (error) {
+            console.error('Error en resetUserUuid:', error);
             res.status(500).json({ error: error.message });
         }
     }),
