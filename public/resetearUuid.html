@@ -326,7 +326,21 @@
           }, 5000);
         } else {
           messageDiv.className = 'message error';
-          messageDiv.textContent = data.message || 'Error al resetear UUID.';
+          
+          // Manejar error específico de reset reciente
+          if (data.error === 'RECENT_RESET_DETECTED') {
+            messageDiv.innerHTML = `
+              <strong>⏱️ Reset reciente detectado</strong><br>
+              ${data.message}<br><br>
+              <small>Por motivos de seguridad, solo se permite un reset cada pocos minutos. 
+              Esto previene el abuso del sistema de reset de UUID.</small>
+            `;
+            confirmBtn.textContent = '� Demasiado Reciente';
+            confirmBtn.disabled = true;
+          } else {
+            messageDiv.textContent = data.message || 'Error al resetear UUID.';
+          }
+          
           confirmBtn.classList.remove('loading');
           confirmBtn.textContent = 'Reintentar';
         }

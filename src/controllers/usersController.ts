@@ -8,7 +8,6 @@ import Classes from "../models/classes";
 import Enrollments from "../models/enrollments";
 import Schedules from "../models/schedules";
 import transporter from "../utils/emailTransporter";
-import { v4 as uuidv4 } from 'uuid';
 import { v2 as cloudinary } from 'cloudinary';
 
 // Import associations to establish relationships
@@ -308,13 +307,13 @@ const usersController = {
         }
         
         // Si el usuario tiene UUID en la BD, debe coincidir
-        // Si el usuario NO tiene UUID (reset), se generará uno nuevo más adelante
+        // Si el usuario NO tiene UUID (después de reset), se registrará el nuevo dispositivo
         if (user.user_uuid && user.user_uuid !== user_uuid) {
           return res.status(403).json({ message: "UUID de usuario inválido" });
         }
         
-        // Si el usuario no tiene UUID en la BD pero envía uno, es válido
-        // Se regenerará después de la autenticación exitosa
+        // Si el usuario no tiene UUID en la BD pero envía uno, es válido (nuevo dispositivo)
+        // Se registrará después de la autenticación exitosa
       }
 
       // Verificar si la cuenta está verificada
@@ -361,13 +360,28 @@ const usersController = {
       // Restablecer intentos en caso de inicio de sesión exitoso
       await Users.update({ attempts: 3 }, { where: { id_user: user.id_user } });
 
-      // Verificar y regenerar UUID si es null (para casos de reset exitoso)
+      // Manejar UUID después de reset (cambio de dispositivo)
       let userUuid = user.user_uuid;
-      if (!userUuid) {
-        userUuid = uuidv4();
+      if (!userUuid && user_uuid) {
+        // Verificar que el nuevo UUID no esté ya en uso por otro usuario
+        const existingUserWithUuid = await Users.findOne({ 
+          where: { 
+            user_uuid: user_uuid,
+            id_user: { [require('sequelize').Op.ne]: user.id_user }
+          } 
+        });
+        
+        if (existingUserWithUuid) {
+          return res.status(409).json({ 
+            message: "Este UUID ya está registrado en otro dispositivo" 
+          });
+        }
+        
+        // El usuario tiene UUID null (después de reset) y proporciona nuevo UUID del dispositivo
+        userUuid = user_uuid;
         await Users.update({ user_uuid: userUuid }, { where: { id_user: user.id_user } });
-        console.log(`🔄 UUID regenerado para usuario ${user.id_user}: ${userUuid}`);
-        console.log(`📱 Login desde app móvil - UUID anterior: ${user_uuid || 'N/A'}`);
+        console.log(`� Nuevo dispositivo registrado para usuario ${user.id_user}: ${userUuid}`);
+        console.log(`� UUID actualizado después de reset exitoso`);
       }
 
       const token = jwt.sign(
@@ -937,6 +951,17 @@ const usersController = {
         return res.status(404).json({ message: "Usuario no encontrado." });
       }
 
+      // 🔒 VALIDACIÓN DE SEGURIDAD: Verificar que no se haya reseteado recientemente
+      const now = new Date();
+      const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000); // 5 minutos
+      
+      if (user.last_uuid_change && new Date(user.last_uuid_change) > fiveMinutesAgo) {
+        return res.status(400).json({ 
+          message: "Ya se realizó un reset recientemente. Espera unos minutos antes de intentar nuevamente.",
+          error: "RECENT_RESET_DETECTED"
+        });
+      }
+
       // Guardar UUID anterior para logs (opcional)
       const previousUuid = user.user_uuid;
 
@@ -953,6 +978,7 @@ const usersController = {
       console.log(`   UUID anterior: ${previousUuid || 'null'}`);
       console.log(`   UUID nuevo: Se generará en próximo login`);
       console.log(`   Fecha: ${new Date().toISOString()}`);
+      console.log(`🔒 Reset registrado para prevenir reutilización reciente`);
 
       res.status(200).json({
         message: "UUID reseteado exitosamente.",
