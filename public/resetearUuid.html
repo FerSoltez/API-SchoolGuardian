@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resetear UUID | School Guardian</title>
+  <style>
+    :root {
+      --primary-color: #1a1a1a;
+      --danger-color: #dc3545;
+      --warning-color: #ffc107;
+      --success-color: #28a745;
+      --text-color: #333;
+      --light-gray: #f5f5f5;
+      --border-color: #e0e0e0;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    body {
+      background-color: var(--light-gray);
+      background-image: url('https://c1.wallpaperflare.com/preview/127/366/443/library-book-bookshelf-read.jpg');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .navbar {
+      background-color: var(--primary-color);
+      color: white;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .navbar-brand {
+      font-size: 1.25rem;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+    }
+    
+    .main-container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem;
+    }
+    
+    .reset-card {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+      width: 100%;
+      max-width: 500px;
+      padding: 2rem;
+      backdrop-filter: blur(5px);
+      text-align: center;
+    }
+    
+    .reset-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: var(--text-color);
+    }
+    
+    .warning-section {
+      background-color: #fff3cd;
+      border: 1px solid #ffc107;
+      border-left: 4px solid #ffc107;
+      border-radius: 4px;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+      text-align: left;
+    }
+    
+    .warning-title {
+      font-weight: 600;
+      color: #856404;
+      margin-bottom: 0.5rem;
+    }
+    
+    .warning-text {
+      color: #856404;
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+    
+    .warning-list {
+      list-style: none;
+      padding-left: 0;
+      margin: 0.5rem 0;
+    }
+    
+    .warning-list li {
+      margin-bottom: 0.25rem;
+      position: relative;
+      padding-left: 1rem;
+    }
+    
+    .warning-list li:before {
+      content: "•";
+      color: #856404;
+      position: absolute;
+      left: 0;
+    }
+    
+    .action-button {
+      display: block;
+      width: 100%;
+      padding: 0.75rem 1rem;
+      font-size: 1rem;
+      font-weight: 500;
+      text-align: center;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+      background-color: var(--danger-color);
+      color: white;
+      margin-bottom: 1rem;
+    }
+    
+    .action-button:hover:not(:disabled) {
+      background-color: #c82333;
+    }
+    
+    .action-button:disabled {
+      background-color: #6c757d;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+    
+    .action-button.loading {
+      background-color: #6c757d;
+      cursor: wait;
+    }
+    
+    .message {
+      margin-top: 1rem;
+      padding: 0.75rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      text-align: center;
+      display: none;
+    }
+    
+    .message.success {
+      background-color: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    
+    .message.error {
+      background-color: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    
+    footer {
+      background-color: var(--primary-color);
+      color: white;
+      text-align: center;
+      padding: 1rem;
+      margin-top: auto;
+    }
+    
+    @media (max-width: 768px) {
+      .reset-card {
+        padding: 1.5rem;
+        margin: 0 1rem;
+      }
+      
+      .navbar {
+        padding: 0.75rem 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-brand">SCHOOL GUARDIAN</div>
+  </nav>
+  
+  <div class="main-container">
+    <div class="reset-card">
+      <h1 class="reset-title">Confirmar Reset de UUID</h1>
+      
+      <div class="warning-section">
+        <div class="warning-title">⚠️ Esta acción realizará los siguientes cambios:</div>
+        <div class="warning-text">
+          <ul class="warning-list">
+            <li>Eliminará tu UUID actual del sistema</li>
+            <li>Requerirá configurar un nuevo dispositivo</li>
+            <li>Generará un nuevo identificador en tu próximo login</li>
+            <li>Es útil para migrar a un nuevo dispositivo móvil</li>
+            <li>No afectará tu acceso a clases o información personal</li>
+          </ul>
+          <p style="margin-top: 0.5rem;"><strong>¿Estás seguro de continuar?</strong></p>
+        </div>
+      </div>
+      
+      <button id="confirmBtn" class="action-button">Confirmar Reset de UUID</button>
+      
+      <div class="message" id="message"></div>
+    </div>
+  </div>
+
+  <footer>
+    <p>&copy; 2025 SchoolGuardian. Todos los derechos reservados.</p>
+  </footer>
+
+  <script>
+    const confirmBtn = document.getElementById('confirmBtn');
+    const messageDiv = document.getElementById('message');
+
+    // Obtener token de la URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+
+    // Verificar que hay token
+    if (!token) {
+      messageDiv.style.display = 'block';
+      messageDiv.className = 'message error';
+      messageDiv.textContent = 'Token no encontrado. Por favor, revisa el enlace del correo.';
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Token Inválido';
+    }
+
+    confirmBtn.addEventListener('click', async () => {
+      if (!token) {
+        return;
+      }
+
+      // Confirmar acción
+      const confirmed = confirm(
+        '¿Estás seguro de que quieres resetear tu UUID?\\n\\n' +
+        'Esta acción:\\n' +
+        '• Eliminará tu UUID actual\\n' +
+        '• Generará uno nuevo en tu próximo login\\n' +
+        '• Puede desconectar dispositivos temporalmente\\n\\n' +
+        'Haz clic en "Aceptar" para continuar o "Cancelar" para abortar.'
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      // Mostrar estado de carga
+      confirmBtn.disabled = true;
+      confirmBtn.classList.add('loading');
+      confirmBtn.textContent = 'Procesando...';
+      messageDiv.style.display = 'none';
+
+      try {
+        // Realizar petición
+        const response = await fetch('/api/users/resetUuid', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ token }),
+        });
+
+        const data = await response.json();
+
+        messageDiv.style.display = 'block';
+
+        if (response.ok) {
+          messageDiv.className = 'message success';
+          messageDiv.textContent = data.message + ' ' + (data.info || '');
+          confirmBtn.textContent = '✅ UUID Reseteado';
+          confirmBtn.disabled = true;
+          
+          // Mostrar información adicional
+          if (data.user) {
+            messageDiv.innerHTML += `<br><br><strong>Usuario:</strong> ${data.user.name}<br><strong>Email:</strong> ${data.user.email}`;
+          }
+
+          // Redirigir después de unos segundos
+          setTimeout(() => {
+            window.location.href = 'https://orizon-team.github.io/SchoolGuardian/';
+          }, 5000);
+        } else {
+          messageDiv.className = 'message error';
+          
+          // Manejar error específico de token ya usado
+          if (data.error === 'TOKEN_ALREADY_USED') {
+            messageDiv.innerHTML = `
+              <strong>⚠️ Enlace ya utilizado</strong><br>
+              ${data.message}<br><br>
+              <small>Este enlace de reset solo puede usarse una vez por motivos de seguridad. 
+              Si necesitas resetear nuevamente tu UUID, solicita un nuevo enlace desde la aplicación.</small>
+            `;
+            confirmBtn.textContent = '🔒 Enlace Usado';
+            confirmBtn.disabled = true;
+          } else {
+            messageDiv.textContent = data.message || 'Error al resetear UUID.';
+            confirmBtn.classList.remove('loading');
+            confirmBtn.textContent = 'Reintentar';
+            confirmBtn.disabled = false;
+          }
+        }
+      } catch (error) {
+        messageDiv.style.display = 'block';
+        messageDiv.className = 'message error';
+        messageDiv.textContent = 'Error de conexión. Inténtalo de nuevo más tarde.';
+        confirmBtn.classList.remove('loading');
+        confirmBtn.textContent = 'Reintentar';
+        confirmBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
