@@ -731,10 +731,14 @@ const usersController = {
                 });
             }
             // Crear token específico para reset de UUID
+            const tokenCreationTime = Date.now();
+            console.log(`🎫 CREANDO TOKEN - Usuario: ${user.name}`);
+            console.log(`   Token timestamp: ${tokenCreationTime} (${new Date(tokenCreationTime).toISOString()})`);
             const token = jsonwebtoken_1.default.sign({
                 email,
                 action: 'uuid_reset',
-                user_id: user.id_user
+                user_id: user.id_user,
+                tokenCreated: tokenCreationTime
             }, process.env.JWT_SECRET || 'secret_key', { expiresIn: '24h' });
             const mailOptions = {
                 from: '"Soporte SchoolGuardian" <tu_correo@gmail.com>',
@@ -818,26 +822,41 @@ const usersController = {
             if (!user) {
                 return res.status(404).json({ message: "Usuario no encontrado." });
             }
-            // 🔒 VALIDACIÓN DE SEGURIDAD: Verificar que no se haya reseteado recientemente
-            const now = new Date();
-            const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000); // 5 minutos
-            if (user.last_uuid_change && new Date(user.last_uuid_change) > fiveMinutesAgo) {
-                return res.status(400).json({
-                    message: "Ya se realizó un reset recientemente. Espera unos minutos antes de intentar nuevamente.",
-                    error: "RECENT_RESET_DETECTED"
-                });
+            // 🔒 VALIDACIÓN DE SEGURIDAD: Verificar que el token no haya sido invalidado por un reset posterior
+            const { tokenCreated } = decodedToken;
+            console.log('🔍 DEPURACIÓN TOKEN VALIDATION:');
+            console.log(`   Token creado: ${tokenCreated} (${new Date(tokenCreated).toISOString()})`);
+            console.log(`   Último reset: ${user.last_uuid_change}`);
+            if (user.last_uuid_change && tokenCreated) {
+                const lastResetTime = new Date(user.last_uuid_change).getTime();
+                console.log(`   Último reset timestamp: ${lastResetTime} (${new Date(lastResetTime).toISOString()})`);
+                console.log(`   Token timestamp: ${tokenCreated} (${new Date(tokenCreated).toISOString()})`);
+                console.log(`   ¿Último reset > Token?: ${lastResetTime > tokenCreated}`);
+                // Si el último reset fue DESPUÉS de la creación del token, el token ya fue usado
+                if (lastResetTime > tokenCreated) {
+                    console.log('⛔ TOKEN RECHAZADO: Ya fue usado');
+                    return res.status(400).json({
+                        message: "Este enlace de reset ya ha sido utilizado.",
+                        error: "TOKEN_ALREADY_USED"
+                    });
+                }
+            }
+            else {
+                console.log('   Primera vez usando reset o token sin timestamp');
             }
             // Guardar UUID anterior para logs (opcional)
             const previousUuid = user.user_uuid;
+            const resetTimestamp = new Date();
             // Resetear UUID y registrar fecha del cambio
             yield users_1.default.update({
                 user_uuid: '',
-                last_uuid_change: new Date()
+                last_uuid_change: resetTimestamp
             }, { where: { id_user: user_id } });
             console.log(`🔄 UUID Reset - Usuario: ${user.name} (${email})`);
             console.log(`   UUID anterior: ${previousUuid || 'null'}`);
             console.log(`   UUID nuevo: Se generará en próximo login`);
-            console.log(`   Fecha: ${new Date().toISOString()}`);
+            console.log(`   Fecha: ${resetTimestamp.toISOString()}`);
+            console.log(`   Timestamp guardado: ${resetTimestamp.getTime()}`);
             console.log(`🔒 Reset registrado para prevenir reutilización reciente`);
             res.status(200).json({
                 message: "UUID reseteado exitosamente.",
