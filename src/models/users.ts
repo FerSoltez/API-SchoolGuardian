@@ -13,6 +13,7 @@ interface UsersAttributes {
   attempts: number;
   profile_image_url?: string; // URL de la imagen de perfil en Cloudinary
   last_uuid_change?: Date; // Fecha del último cambio de UUID
+  last_password_change?: Date; // Fecha del último cambio de contraseña
 }
 
 interface UsersCreationAttributes {
@@ -26,6 +27,7 @@ interface UsersCreationAttributes {
   attempts: number;
   profile_image_url?: string; // URL de la imagen de perfil en Cloudinary
   last_uuid_change?: Date; // Fecha del último cambio de UUID
+  last_password_change?: Date; // Fecha del último cambio de contraseña
 }
 
 class UsersModel extends Model<UsersAttributes, UsersCreationAttributes> implements UsersAttributes {
@@ -40,6 +42,7 @@ class UsersModel extends Model<UsersAttributes, UsersCreationAttributes> impleme
   public attempts!: number;
   public profile_image_url?: string; // URL de la imagen de perfil en Cloudinary
   public last_uuid_change?: Date; // Fecha del último cambio de UUID
+  public last_password_change?: Date; // Fecha del último cambio de contraseña
 }
 
 UsersModel.init(
@@ -106,6 +109,11 @@ UsersModel.init(
       defaultValue: null,
     },
     last_uuid_change: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
+    },
+    last_password_change: {
       type: DataTypes.DATE,
       allowNull: true,
       defaultValue: null,

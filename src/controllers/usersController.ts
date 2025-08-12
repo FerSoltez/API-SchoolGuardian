@@ -737,27 +737,78 @@ const usersController = {
         return res.status(400).json({ message: "Token y nueva contraseña son requeridos" });
       }
   
-      // Verificar el token
-      let email: string;
+      // Verificar y decodificar el token
+      let decodedToken: any;
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_key') as { email: string };
-        email = decoded.email;
+        decodedToken = jwt.verify(token, process.env.JWT_SECRET || 'secret_key');
       } catch (error) {
         return res.status(400).json({ message: "Token inválido o expirado" });
       }
+
+      // Verificar que el token sea específico para cambio de contraseña
+      if (decodedToken.action !== 'password_reset') {
+        return res.status(400).json({ message: "Token no válido para esta operación." });
+      }
+
+      const { email, user_id } = decodedToken;
   
-      const user = await Users.findOne({ where: { email } });
+      const user = await Users.findOne({ where: { email, id_user: user_id } });
   
       if (!user) {
         return res.status(404).json({ message: "Usuario no encontrado" });
       }
+
+      // 🔒 VALIDACIÓN DE SEGURIDAD: Verificar que el token no haya sido invalidado por un cambio posterior
+      const { tokenCreated } = decodedToken;
+      
+      console.log('🔍 DEPURACIÓN TOKEN CONTRASEÑA:');
+      console.log(`   Token creado: ${tokenCreated} (${new Date(tokenCreated).toISOString()})`);
+      console.log(`   Último cambio: ${user.last_password_change}`);
+      
+      if (user.last_password_change && tokenCreated) {
+        const lastChangeTime = new Date(user.last_password_change).getTime();
+        
+        console.log(`   Último cambio timestamp: ${lastChangeTime} (${new Date(lastChangeTime).toISOString()})`);
+        console.log(`   Token timestamp: ${tokenCreated} (${new Date(tokenCreated).toISOString()})`);
+        console.log(`   ¿Último cambio > Token?: ${lastChangeTime > tokenCreated}`);
+        
+        // Si el último cambio fue DESPUÉS de la creación del token, el token ya fue usado
+        if (lastChangeTime > tokenCreated) {
+          console.log('⛔ TOKEN CONTRASEÑA RECHAZADO: Ya fue usado');
+          return res.status(400).json({ 
+            message: "Este enlace de cambio de contraseña ya ha sido utilizado.",
+            error: "TOKEN_ALREADY_USED"
+          });
+        }
+      } else {
+        console.log('   Primera vez cambiando contraseña o token sin timestamp');
+      }
   
       const hashedPassword = await bcrypt.hash(newPassword, 10);
+      const changeTimestamp = new Date();
   
-      await Users.update({ password: hashedPassword }, { where: { email } });
+      await Users.update(
+        { 
+          password: hashedPassword,
+          last_password_change: changeTimestamp
+        }, 
+        { where: { email, id_user: user_id } }
+      );
+
+      console.log(`🔐 Contraseña Cambiada - Usuario: ${user.name} (${email})`);
+      console.log(`   Fecha: ${changeTimestamp.toISOString()}`);
+      console.log(`   Timestamp guardado: ${changeTimestamp.getTime()}`);
+      console.log(`🔒 Cambio registrado para prevenir reutilización de enlace`);
   
-      res.status(200).json({ message: "Contraseña actualizada exitosamente" });
+      res.status(200).json({ 
+        message: "Contraseña actualizada exitosamente",
+        user: {
+          name: user.name,
+          email: user.email
+        }
+      });
     } catch (error) {
+      console.error('Error en changePassword:', error);
       res.status(500).json({ error: (error as Error).message });
     }
   },
@@ -774,8 +825,22 @@ const usersController = {
       if (!user) {
         return res.status(404).json({ message: "Usuario no encontrado." });
       }
-  
-      const token = jwt.sign({ email }, process.env.JWT_SECRET || 'secret_key', { expiresIn: '24h' });
+
+      // Crear token específico para cambio de contraseña con timestamp de seguridad
+      const tokenCreationTime = Date.now();
+      console.log(`🔑 CREANDO TOKEN CONTRASEÑA - Usuario: ${user.name}`);
+      console.log(`   Token timestamp: ${tokenCreationTime} (${new Date(tokenCreationTime).toISOString()})`);
+      
+      const token = jwt.sign(
+        { 
+          email, 
+          action: 'password_reset',
+          user_id: user.id_user,
+          tokenCreated: tokenCreationTime
+        }, 
+        process.env.JWT_SECRET || 'secret_key', 
+        { expiresIn: '24h' }
+      );
   
       const mailOptions = {
         from: '"Soporte SchoolGuardian" <tu_correo@gmail.com>',

@@ -71,6 +71,11 @@ UsersModel.init({
         allowNull: true,
         defaultValue: null,
     },
+    last_password_change: {
+        type: sequelize_1.DataTypes.DATE,
+        allowNull: true,
+        defaultValue: null,
+    },
 }, {
     sequelize: database_1.sequelize,
     modelName: "Users",

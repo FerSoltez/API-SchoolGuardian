@@ -367,6 +367,22 @@
     const togglePassword = document.getElementById('togglePassword');
     const passwordInput = document.getElementById('nuevaContrasena');
 
+    // Verificar que hay token en la URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+
+    if (!token) {
+      messageDiv.style.display = 'block';
+      messageDiv.className = 'message error';
+      messageDiv.textContent = 'Token no encontrado. Por favor, revisa el enlace del correo.';
+      
+      // Deshabilitar el formulario
+      const submitBtn = form.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Token Inválido';
+      passwordInput.disabled = true;
+    }
+
     // Add password toggle functionality
     togglePassword.addEventListener('click', function() {
       const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
@@ -418,9 +434,36 @@
           messageDiv.textContent = data.message || 'Contraseña actualizada exitosamente.';
           messageDiv.className = 'message success';
           form.reset();
+          
+          // Mostrar información adicional si está disponible
+          if (data.user) {
+            messageDiv.innerHTML += `<br><br><strong>Usuario:</strong> ${data.user.name}<br><strong>Email:</strong> ${data.user.email}`;
+          }
+          
+          // Redirigir después de unos segundos
+          setTimeout(() => {
+            window.location.href = 'https://orizon-team.github.io/SchoolGuardian/';
+          }, 3000);
         } else {
-          messageDiv.textContent = data.message || 'Error al cambiar la contraseña.';
-          messageDiv.className = 'message error';
+          // Manejar error específico de token ya usado
+          if (data.error === 'TOKEN_ALREADY_USED') {
+            messageDiv.innerHTML = `
+              <strong>⚠️ Enlace ya utilizado</strong><br>
+              ${data.message}<br><br>
+              <small>Este enlace de cambio de contraseña solo puede usarse una vez por motivos de seguridad. 
+              Si necesitas cambiar tu contraseña nuevamente, solicita un nuevo enlace desde la aplicación.</small>
+            `;
+            messageDiv.className = 'message error';
+            
+            // Deshabilitar el formulario
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = '🔒 Enlace Usado';
+            passwordInput.disabled = true;
+          } else {
+            messageDiv.textContent = data.message || 'Error al cambiar la contraseña.';
+            messageDiv.className = 'message error';
+          }
         }
       } catch (error) {
         messageDiv.textContent = 'Error de conexión. Inténtalo de nuevo más tarde.';
