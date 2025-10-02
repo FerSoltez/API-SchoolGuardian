@@ -80,7 +80,7 @@ const usersController = {
         password: hashedPassword,
         role,
         attempts: 3, // Inicia con 3 intentos disponibles
-        verification: role !== 'Student' // Solo los estudiantes necesitan verificación
+        verification: true // ⚠️ TEMPORALMENTE: Todos los usuarios se verifican automáticamente
       };
 
       // Agregar matrícula para estudiantes y profesores, null para administradores
@@ -105,8 +105,16 @@ const usersController = {
       // Crear el nuevo usuario
       const newUser = await Users.create(userData);
 
-      // Enviar correo de verificación SOLO para estudiantes
+      // ⚠️ TEMPORALMENTE DESACTIVADO: Envío de correo de verificación 
       if (role === 'Student') {
+        console.log('📧 [MODO DESARROLLO] Correo de verificación desactivado temporalmente');
+        console.log(`   📤 Se habría enviado correo a: ${email}`);
+        console.log(`   👤 Usuario: ${name}`);
+        console.log(`   🎫 UUID: ${user_uuid}`);
+        console.log('   ✅ Usuario verificado automáticamente para desarrollo');
+        
+        /* CÓDIGO ORIGINAL COMENTADO TEMPORALMENTE:
+        
         // Preparar datos para el token JWT
         const tokenData: any = { email, user_uuid };
 
@@ -151,12 +159,12 @@ const usersController = {
         };
 
         await transporter.sendMail(mailOptions);
+        
+        */
       }
 
-      // Respuesta diferenciada según el rol
-      const message = role === 'Student' 
-        ? "Usuario creado exitosamente. Revisa tu correo para verificar tu cuenta."
-        : "Usuario creado exitosamente. Tu cuenta está lista para usar.";
+      // Respuesta con verificación automática activada
+      const message = "🎓 Usuario creado exitosamente. Cuenta verificada automáticamente (modo desarrollo).";
 
       res.status(201).json({
         message,
@@ -169,6 +177,11 @@ const usersController = {
           user_uuid: newUser.user_uuid, // Importante para estudiantes
           verification: newUser.verification,
           profile_image_url: newUser.profile_image_url || null // Incluir la URL de la imagen si existe, null si no
+        },
+        developmentMode: {
+          emailDisabled: true,
+          autoVerified: true,
+          note: "Los correos están temporalmente desactivados para desarrollo"
         }
       });
     } catch (error) {
@@ -826,6 +839,14 @@ const usersController = {
         return res.status(404).json({ message: "Usuario no encontrado." });
       }
 
+      // ⚠️ TEMPORALMENTE DESACTIVADO: Envío de correo para reset de contraseña
+      console.log('📧 [MODO DESARROLLO] Envío de correo para reset de contraseña desactivado');
+      console.log(`   📤 Se habría enviado correo a: ${email}`);
+      console.log(`   👤 Usuario: ${user.name}`);
+      console.log('   💡 Para desarrollo: La contraseña se puede cambiar directamente');
+      
+      /* CÓDIGO ORIGINAL COMENTADO TEMPORALMENTE:
+
       // Crear token específico para cambio de contraseña con timestamp de seguridad
       const tokenCreationTime = Date.now();
       console.log(`🔑 CREANDO TOKEN CONTRASEÑA - Usuario: ${user.name}`);
@@ -878,7 +899,17 @@ const usersController = {
   
       await transporter.sendMail(mailOptions);
   
-      res.status(200).json({ message: "Correo enviado exitosamente." });
+      */
+
+      res.status(200).json({ 
+        message: "🔧 [MODO DESARROLLO] Función de reset de contraseña temporalmente desactivada.",
+        developmentMode: {
+          emailDisabled: true,
+          wouldHaveSentTo: email,
+          userName: user.name,
+          note: "Para desarrollo: contacta al administrador para cambiar contraseñas"
+        }
+      });
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
     }
@@ -915,6 +946,15 @@ const usersController = {
           })
         });
       }
+
+      // ⚠️ TEMPORALMENTE DESACTIVADO: Envío de correo para reset de UUID
+      console.log('📧 [MODO DESARROLLO] Envío de correo para reset de UUID desactivado');
+      console.log(`   📤 Se habría enviado correo a: ${email}`);
+      console.log(`   👤 Usuario: ${user.name}`);
+      console.log('   🎫 UUID actual:', user.user_uuid || 'sin UUID');
+      console.log('   💡 Para desarrollo: El UUID se puede resetear directamente');
+
+      /* CÓDIGO ORIGINAL COMENTADO TEMPORALMENTE:
 
       // Crear token específico para reset de UUID
       const tokenCreationTime = Date.now();
@@ -982,9 +1022,17 @@ const usersController = {
 
       await transporter.sendMail(mailOptions);
 
+      */
+
       res.status(200).json({ 
-        message: "Correo de confirmación enviado exitosamente.",
-        info: "Revisa tu bandeja de entrada y sigue las instrucciones para confirmar el cambio de UUID."
+        message: "🔧 [MODO DESARROLLO] Función de reset de UUID temporalmente desactivada.",
+        developmentMode: {
+          emailDisabled: true,
+          wouldHaveSentTo: email,
+          userName: user.name,
+          currentUuid: user.user_uuid || 'sin UUID',
+          note: "Para desarrollo: contacta al administrador para resetear UUIDs"
+        }
       });
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
