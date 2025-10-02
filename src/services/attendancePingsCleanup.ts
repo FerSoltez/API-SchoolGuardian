@@ -10,12 +10,12 @@ class AttendancePingsCleanupService {
   public startCleanupService(): void {
     console.log('🧹 Iniciando servicio de limpieza de Attendance_Pings...');
     
-    // Ejecutar cada 30 segundos
-    this.cleanupJob = cron.schedule('*/30 * * * * *', async () => {
+    // Ejecutar cada 1 minuto
+    this.cleanupJob = cron.schedule('0 * * * * *', async () => {
       await this.cleanupExpiredPings();
     });
 
-    console.log('✅ Servicio de limpieza iniciado - se ejecuta cada 30 segundos');
+    console.log('✅ Servicio de limpieza iniciado - se ejecuta cada 1 minuto');
   }
 
   // Detener el servicio de limpieza
